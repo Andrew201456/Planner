@@ -71,7 +71,7 @@ async function issueSession(password) {
 }
 
 async function verifySession(password, request) {
-  const match = /^Bearer (\\d{13})\\.([0-9a-f]{64})\\.([0-9a-f]{64})$/.exec(request.headers.get("Authorization") || "");
+  const match = /^Bearer (\d{13})\.([0-9a-f]{64})\.([0-9a-f]{64})$/.exec(request.headers.get("Authorization") || "");
   if (!match || Number(match[1]) <= Date.now() || Number(match[1]) > Date.now() + sessionDays * 86400000) return false;
   return equal(match[3], await signature(password, match[1] + "." + match[2]));
 }
