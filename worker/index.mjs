@@ -150,8 +150,8 @@ export default {
         const after = url.searchParams.get("after") || "";
         if (after && !validKey(after)) return json({ error: "cursor" }, 400);
         const { results } = await env.DB.prepare(
-          "SELECT record_key, version, data FROM planner_records WHERE planner_id = ? AND record_key > ? ORDER BY record_key LIMIT 12"
-        ).bind(owner, after).all();
+          "SELECT record_key, version, data FROM planner_records WHERE planner_id = ? AND record_key > ? AND (? = 1 OR record_key NOT LIKE 'food:%') ORDER BY record_key LIMIT 12"
+        ).bind(owner, after, url.searchParams.get("types")==="all"?1:0).all();
         return json({ records: results.map(unpack), next: results.length === 12 ? results.at(-1).record_key : null });
       }
       if (request.method !== "PUT") return json({ error: "method" }, 405);
