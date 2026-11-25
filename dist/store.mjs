@@ -1,13 +1,45 @@
 import { presets, validRecord, validVersion } from "./model.mjs";
-import { mergePlanners } from "./pairing.mjs";
 
 const seedVersion = "0000000000000000-00000000-0000-4000-8000-000000000000";
 const channelName = "planner.v2.changes";
 const endpoint = location.hostname === "andrew-imerisio-planner.flutedcloth5.chatgpt.site"
   ? "https://planner.asmylonas8.workers.dev/api/" : "/api/";
 
-function newToken() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, "0")).join("");
+const sessionKey = "planner.account.session.v1";
+function remember(token) { try { localStorage.setItem(sessionKey,token); } catch {} }
+export function signOut() { try { localStorage.removeItem(sessionKey); } catch {} }
+async function authRequest(path, options = {}, token) {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(),15000);
+  try {
+    const response = await fetch(endpoint+path, {
+      ...options, signal:control.signal, cache:"no-store", credentials:"omit",
+      headers:{...(token && {Authorization:"Bearer "+token}), ...(options.body && {"Content-Type":"application/json"})}
+    });
+    const data = await response.json().catch(()=>({}));
+    if (!response.ok) {
+      const error = new Error(response.status===401 ? "Λάθος username ή password." :
+        response.status===429 ? "Πολλές προσπάθειες. Δοκίμασε ξανά σε 10 λεπτά." :
+        data.error==="password_not_configured" ? "Δεν έχει ρυθμιστεί το PASSWORD στο Cloudflare." :
+        "Η σύνδεση με το Cloudflare δεν είναι διαθέσιμη.");
+      error.status = response.status; throw error;
+    }
+    return data;
+  } finally { clearTimeout(timer); }
+}
+export async function signIn(username,password) {
+  const data = await authRequest("login",{method:"POST",body:JSON.stringify({username,password})});
+  if (typeof data.token !== "string") throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
+  remember(data.token); return data.token;
+}
+export async function restoreSession() {
+  let token; try { token=localStorage.getItem(sessionKey); } catch {}
+  if (!token) return null;
+  try {
+    const data=await authRequest("session",{},token);
+    if (data.ok===true && data.username==="markarv") return token;
+  } catch(error) { if (error.status!==401) throw error; }
+  signOut(); return null;
 }
 
 function result(request) {
@@ -55,7 +87,7 @@ export function legacyEntries() {
   return entries;
 }
 
-export async function openPlanner() {
+export async function openPlanner(token) {
   const opening = indexedDB.open("planner.v2", 1);
   opening.onupgradeneeded = () => {
     const entries = opening.result.createObjectStore("entries", { keyPath: "key" });
@@ -65,21 +97,20 @@ export async function openPlanner() {
   const db = await result(opening);
   db.onversionchange = () => db.close();
   const legacy = legacyEntries();
-  let { token, writer } = await transact(db, ["settings", "entries"], "readwrite", async tx => {
+  const { legacyToken, writer, migrated } = await transact(db, ["settings", "entries"], "readwrite", async tx => {
     const settings = tx.objectStore("settings");
     const entries = tx.objectStore("entries");
-    let token = await result(settings.get("token"));
+    const legacyToken = await result(settings.get("token"));
+    const migrated = !!await result(settings.get("accountMigrated"));
     let writer = await result(settings.get("writer"));
     if (!writer) { writer = crypto.randomUUID(); settings.put(writer, "writer"); }
-    if (!token) {
-      token = newToken();
-      settings.put(token, "token");
+    if (!migrated && !legacyToken && !await result(entries.count())) {
       for (const value of presets) entries.put({ key: "book:" + value.id, version: seedVersion, value, dirty: 1 });
     }
     for (const { key, value } of legacy) {
       if (!await result(entries.getKey(key))) entries.put({ key, version: nextVersion(), value, dirty: 1 });
     }
-    return { token, writer };
+    return { legacyToken, writer, migrated };
   });
   // Only remove the legacy copy after the records and their pending uploads committed together.
   for (const { source, raw } of legacy) {
@@ -87,18 +118,14 @@ export async function openPlanner() {
   }
 
   const read = fn => transact(db, "entries", "readonly", tx => result(fn(tx.objectStore("entries"))));
-  const settingsValue = key => transact(db, "settings", "readonly", tx => result(tx.objectStore("settings").get(key)));
-  let paired = !!await settingsValue("paired");
-  const scoped = (mode, fn, session) => transact(db, ["settings", "entries"], mode, async tx => {
-    const settings = tx.objectStore("settings");
-    if (await result(settings.get("token")) !== session) throw new Error("Το Planner άλλαξε σε άλλη καρτέλα. Άνοιξέ το ξανά.");
-    return fn(tx.objectStore("entries"), settings);
-  });
+  const scoped = (mode, fn, session) => transact(db, ["settings", "entries"], mode, tx =>
+    fn(tx.objectStore("entries"), tx.objectStore("settings")));
   const edit = (fn, session = token) => scoped("readwrite", fn, session);
   const dirty = () => read(entries => entries.index("dirty").count(1));
   const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(channelName) : null;
   let onChange = () => {}, onStatus = () => {}, onConflict = () => {};
   let running = null, scheduled = false, timer, backoff = 2000;
+  let migrationPending = !migrated;
 
   function notify() {
     if (channel) channel.postMessage("changed");
@@ -106,19 +133,29 @@ export async function openPlanner() {
   }
 
   async function api(path, options, session) {
-    const control = new AbortController();
-    const timeout = setTimeout(() => control.abort(), 15000);
-    try {
-      const response = await fetch(endpoint + path, {
-        ...options, signal: control.signal, cache: "no-store", credentials: "omit",
-        headers: { Authorization: "Bearer " + session, ...(options.body && { "Content-Type": "application/json" }) }
-      });
-      if (!response.ok) {
-        if (path === "pairing/redeem" && [400, 409].includes(response.status)) throw new Error("Ο κωδικός είναι λάθος, έχει λήξει ή έχει ήδη χρησιμοποιηθεί.");
-        throw new Error("Η βάση δεν απάντησε. Δοκίμασε ξανά όταν έχεις σύνδεση.");
+    try { return await authRequest(path,options,session); }
+    catch(error) {
+      if (error.status===401) { signOut(); location.reload(); }
+      throw error;
+    }
+  }
+
+  async function migrate(session) {
+    if (!migrationPending) return;
+    if (legacyToken) {
+      const response = await api("migrate",{method:"POST",body:JSON.stringify({legacyToken})},session);
+      if (response.ok!==true) throw new Error("migration");
+    }
+    // Keep all local rows until acknowledged. Existing clean rows are only imported
+    // if absent in the new account; old offline edits retain their conflict checks.
+    await edit(async (entries,settings) => {
+      if (await result(settings.get("accountMigrated"))) return;
+      for (const row of await result(entries.getAll())) {
+        if (!row.dirty || row.version===seedVersion) entries.put({...row,dirty:1,importOnly:true});
       }
-      return await response.json();
-    } finally { clearTimeout(timeout); }
+      settings.put(true,"accountMigrated");
+    },session);
+    migrationPending=false;
   }
 
   async function pages(session, receive) {
@@ -139,6 +176,11 @@ export async function openPlanner() {
       for (const row of records) {
         if (!row || !validVersion(row.version) || !validRecord(row.key, row.value)) throw new Error("record");
         const current = await result(entries.get(row.key));
+        if (current?.importOnly && sent?.version===current.version) {
+          entries.put({key:row.key,version:row.version,value:row.value,dirty:0});
+          changed ||= current.version!==row.version;
+          continue;
+        }
         if (current?.dirty && Object.hasOwn(current, "base") && current.version !== row.version) {
           if (current.base !== null && row.version <= current.base) continue;
           if (row.version === sent?.version || (row.version.endsWith(writer) && row.version < current.version)) {
@@ -171,14 +213,15 @@ export async function openPlanner() {
     let wrote = false;
     try {
       if (!navigator.onLine) throw new Error("offline");
+      await migrate(session);
       for (;;) {
         const pending = await scoped("readonly", entries => result(entries.index("dirty").getAll(1, 8)), session);
         if (!pending.length) break;
         onStatus("sending");
-        for (const { key, value, version, base } of pending) {
+        for (const { key, value, version, base, importOnly } of pending) {
           if (session !== token) return false;
-          const row = await api("planner", { method: "PUT", body: JSON.stringify({ key, value, version, base }) }, session);
-          if (row.key !== key || (base === undefined && row.version < version)) throw new Error("acknowledgement");
+          const row = await api("planner", { method: "PUT", body: JSON.stringify({ key, value, version, base, importOnly }) }, session);
+          if (row.key !== key || (!importOnly && base === undefined && row.version < version)) throw new Error("acknowledgement");
           if (await applyRemote([row], session, { version })) { notify(); await onChange(); }
           wrote = true;
         }
@@ -233,49 +276,6 @@ export async function openPlanner() {
       }
       return stats;
     },
-    async invite() {
-      if (!await sync()) throw new Error("Σύνδεσε τη συσκευή στο διαδίκτυο για να δημιουργήσεις κωδικό.");
-      const invitation = await api("pairing", { method: "POST" }, token);
-      await edit((entries, settings) => settings.put(true, "paired"));
-      paired = true;
-      notify();
-      return invitation;
-    },
-    async join(input) {
-      const code = input.toUpperCase().replace(/[\s-]/g, "");
-      if (!/^[A-HJ-NP-Z2-9]{12}$/.test(code)) throw new Error("Γράψε τα 12 γράμματα και ψηφία του κωδικού.");
-      const previous = token;
-      if (!await sync()) throw new Error("Σύνδεσε τη συσκευή στο διαδίκτυο και δοκίμασε ξανά.");
-      const next = await edit(async (entries, settings) => {
-        let pending = await result(settings.get("pairing"));
-        if (pending?.code !== code) {
-          pending = { code, token: newToken() };
-          settings.put(pending, "pairing");
-        }
-        return pending.token;
-      }, previous);
-      const receipt = await api("pairing/redeem", { method: "POST", body: JSON.stringify({ code, newToken: next }) }, previous);
-      if (typeof receipt.samePlanner !== "boolean") throw new Error("Η σύνδεση δεν επιβεβαιώθηκε. Δοκίμασε ξανά.");
-      const incoming = [];
-      if (!receipt.samePlanner) await pages(next, records => incoming.push(...records));
-      // Swap the namespace, its cache and any uploads in one durable transaction.
-      await edit(async (entries, settings) => {
-        if (!receipt.samePlanner) {
-          const merged = mergePlanners(await result(entries.getAll()), incoming, previous => nextVersion(previous, writer));
-          entries.clear();
-          for (const row of merged) entries.put(row);
-          settings.put(next, "token");
-        }
-        settings.put(true, "paired");
-        settings.delete("pairing");
-      }, previous);
-      if (!receipt.samePlanner) token = next;
-      paired = true;
-      notify();
-      await onChange();
-      kick();
-      return receipt.samePlanner;
-    },
     async save(type, id, value, expected) {
       const key = type + ":" + id;
       if (!validRecord(key, value)) throw new Error("Έλεγξε τα στοιχεία της καταχώρησης.");
@@ -301,8 +301,6 @@ export async function openPlanner() {
       onStatus = status;
       onConflict = conflict;
       async function otherTab() {
-        if (await settingsValue("token") !== token) { location.reload(); return; }
-        paired = !!await settingsValue("paired");
         await onChange();
         kick();
       }
@@ -310,12 +308,14 @@ export async function openPlanner() {
       else window.addEventListener("storage", event => {
         if (event.key === channelName) otherTab();
       });
+      window.addEventListener("storage", event => { if (event.key===sessionKey && !event.newValue) location.reload(); });
+      window.addEventListener("focus", kick);
       window.addEventListener("online", kick);
       window.addEventListener("offline", kick);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) otherTab();
       });
-      window.setInterval(() => { if (paired && navigator.onLine && !document.hidden && !running) kick(); }, 12000);
+      window.setInterval(() => { if (navigator.onLine && !document.hidden && !running) kick(); }, 5000);
       kick();
     }
   };
