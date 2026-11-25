@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="pages" viewBox="0 0 24 24"><path d="M6 4h12a2 2 0 0 1 2 2v13H8a2 2 0 0 0-2 2V4Zm0 0H5a2 2 0 0 0-2 2v12a3 3 0 0 0 3 3h12M10 8h6m-6 4h5"/></symbol>
+  <symbol id="calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7.5 3v4m9-4v4M3 10h18m-13 4h2"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h13m-5.5-5.5L18 12l-5.5 5.5"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="M19 12H6m5.5-5.5L6 12l5.5 5.5"/></symbol>
+  <symbol id="left" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
+  <symbol id="right" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+  <symbol id="corner" viewBox="0 0 24 24"><path d="M6 18 18 6M7 6h11v11"/></symbol>
+  <symbol id="shopping" viewBox="0 0 24 24"><path d="M3 10h18l-2 9a2 2 0 0 1-2 1.5H7A2 2 0 0 1 5 19l-2-9Zm-.7 0h19.4M7 10l4-6m6 6-4-6m-4.5 9.5 1 4m5-4-1 4"/></symbol>
+  <symbol id="village" viewBox="0 0 24 24"><path d="m2.5 12 9.5-8 9.5 8M5.5 10v10h13V10m-9 10v-6h5v6m1-13V4h3v5"/></symbol>
+  <symbol id="personal" viewBox="0 0 24 24"><path d="M20 5.6c2.2 2.3 1.5 5.8-.5 8.1C17.3 16.2 12 20 12 20s-5.3-3.8-7.5-6.3c-2-2.3-2.7-5.8-.5-8.1C6.2 3.3 10 4.2 12 7c2-2.8 5.8-3.7 8-1.4Z"/></symbol>
+  <symbol id="ideas" viewBox="0 0 24 24"><path d="M8.5 16c0-2-3-3.2-3-7a6.5 6.5 0 1 1 13 0c0 3.8-3 5-3 7h-7Zm1 3h5m-4 2h3M12 16v-5m-2-1 2 2 2-2"/></symbol>
+  <symbol id="text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="m3 6 1.6 1.6L8 4m3 3h10M3 13l1.6 1.6L8 11m3 3h10m-10 6h7"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13m-8 3v7m4-7v7"/></symbol>
+  <symbol id="pencil" viewBox="0 0 24 24"><path d="m4 15 11.5-11.5a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L9 20l-6 1 1-6Zm9.5-9.5 5 5"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+</svg>

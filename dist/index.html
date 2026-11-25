@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#faf9f5">
+  <meta name="description" content="Το προσωπικό σου σημειωματάριο με χρωματιστά τετράδια, λίστες και ημερολόγιο.">
+  <title>Planner</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Μετάβαση στο περιεχόμενο</a>
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand" href="#notes" aria-label="Planner, αρχική"><img src="./icon.svg" alt="" width="40" height="40"><span>Planner</span></a>
+      <nav class="main-nav" aria-label="Κύρια πλοήγηση">
+        <a href="#notes" id="nav-notes" aria-current="page"><svg aria-hidden="true"><use href="./icons.svg#pages"/></svg>Σημειώσεις</a>
+        <a href="#calendar" id="nav-calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg>Ημερολόγιο</a>
+      </nav>
+      <a class="date-shortcut" id="today-shortcut" href="#calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span></span></a>
+    </div>
+  </header>
+  <main id="content" tabindex="-1"></main>
+  <noscript>Ενεργοποίησε τη JavaScript για να ανοίξεις το Planner.</noscript>
+  <p class="toast" id="toast" role="status" hidden></p>
+
+  <dialog id="note-dialog" aria-labelledby="note-heading">
+    <form id="note-form">
+      <div class="sheet-head">
+        <h2 id="note-heading">Νέα σημείωση</h2>
+        <button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button>
+      </div>
+      <div class="sheet-body">
+        <fieldset class="type-picker">
+          <legend class="sr-only">Είδος σημείωσης</legend>
+          <label><input type="radio" name="kind" value="text" checked><span><svg aria-hidden="true"><use href="./icons.svg#text"/></svg>Κείμενο</span></label>
+          <label><input type="radio" name="kind" value="list"><span><svg aria-hidden="true"><use href="./icons.svg#list"/></svg>Λίστα</span></label>
+        </fieldset>
+        <label class="field">Τίτλος <input id="note-title" type="text" maxlength="160" placeholder="Τίτλος (προαιρετικά)" autofocus></label>
+        <label class="field"><span id="body-label">Σημείωση</span><textarea id="note-body" rows="5" maxlength="20000" placeholder="Γράψε εδώ…"></textarea></label>
+        <div class="meta-fields">
+          <label class="field">Τετράδιο <select id="note-book" required></select></label>
+          <label class="field">Ημερομηνία <input id="note-date" type="date" min="0001-01-01" max="9999-12-31"></label>
+        </div>
+        <p class="form-error" id="note-error" role="alert" hidden></p>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="delete-button" id="delete-note" hidden><svg aria-hidden="true"><use href="./icons.svg#trash"/></svg>Διαγραφή</button>
+        <button type="submit" class="primary">Αποθήκευση</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="book-dialog" aria-labelledby="book-heading">
+    <form id="book-form">
+      <div class="sheet-head">
+        <h2 id="book-heading">Νέο τετράδιο</h2>
+        <button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button>
+      </div>
+      <div class="sheet-body">
+        <label class="field">Όνομα <input type="text" id="book-name" maxlength="45" placeholder="π.χ. Εκδρομές" required autofocus></label>
+        <fieldset class="colors"><legend>Χρώμα εξωφύλλου</legend><div id="color-options"></div></fieldset>
+        <p class="form-error" id="book-error" role="alert" hidden></p>
+      </div>
+      <div class="sheet-actions"><button type="submit" class="primary">Δημιουργία</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
