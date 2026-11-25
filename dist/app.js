@@ -383,6 +383,53 @@ async function startPlanner() {
   });
 
   document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
+  if ($("devices")) {
+    const dialog = $("devices-dialog"), issue = $("create-code");
+    const submit = $("join-form").querySelector("[type=submit]");
+    let expires = 0;
+    $("devices").addEventListener("click", () => {
+      formError("pair-error");
+      if (Date.now() >= expires) $("pair-result").hidden = true;
+      dialog.showModal();
+    });
+    async function pairingAction(action) {
+      if (issue.disabled || submit.disabled) return;
+      formError("pair-error");
+      issue.disabled = submit.disabled = true;
+      try {
+        if (!store) throw new Error(storageMessage);
+        await action();
+      } catch (error) {
+        formError("pair-error", error instanceof TypeError || error.name === "AbortError"
+          ? "Έλεγξε τη σύνδεση στο διαδίκτυο και δοκίμασε ξανά." : error.message);
+      } finally { issue.disabled = submit.disabled = false; }
+    }
+    issue.addEventListener("click", () => pairingAction(async () => {
+      const invitation = await store.invite();
+      expires = invitation.expires;
+      $("issued-code").textContent = invitation.code.match(/.{4}/g).join("-");
+      const time = new Intl.DateTimeFormat("el-GR", { hour: "2-digit", minute: "2-digit" }).format(expires);
+      $("code-expiration").textContent = "Ισχύει για μία σύνδεση, έως τις " + time + ".";
+      $("copy-code").textContent = "Αντιγραφή";
+      $("pair-result").hidden = false;
+    }));
+    $("copy-code").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText($("issued-code").textContent);
+        $("copy-code").textContent = "Αντιγράφηκε ✓";
+      } catch { formError("pair-error", "Πάτησε παρατεταμένα τον κωδικό για αντιγραφή."); }
+    });
+    $("join-form").addEventListener("submit", event => {
+      event.preventDefault();
+      pairingAction(async () => {
+        const already = await store.join($("join-code").value);
+        $("join-form").reset();
+        $("pair-result").hidden = true;
+        dialog.close();
+        say(already ? "Οι συσκευές έχουν ήδη το ίδιο Planner." : "Η συσκευή συνδέθηκε στο κοινό Planner.");
+      });
+    });
+  }
   document.querySelector(".skip").addEventListener("click", event => {
     event.preventDefault();
     main.focus();
@@ -399,7 +446,7 @@ async function startPlanner() {
   try { store = await openPlanner(); }
   catch { storageMessage = "Ο browser δεν επέτρεψε την αποθήκευση στη συσκευή. Άνοιξε ξανά το Planner για να αποθηκεύσεις αλλαγές."; }
   await reload();
-  store?.start(reload, syncStatus);
+  store?.start(reload, syncStatus, say);
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }

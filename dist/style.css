@@ -40,6 +40,8 @@ h1, h2, h3, p { margin: 0; }
 .main-nav a[aria-current] { border-color: var(--blue); color: var(--blue); font-weight: 650; }
 .date-shortcut { display: flex; align-items: center; gap: 7px; margin-left: auto; color: #535f70; min-height: 44px; font-size: .83rem; }
 .date-shortcut svg { width: 17px; height: 17px; }
+.devices-button { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; color: var(--blue); font-weight: 650; font-size: .83rem; }
+.devices-button svg { width: 19px; height: 19px; }
 main { min-height: 75vh; padding-top: clamp(26px,5vw,53px); padding-bottom: 56px; }
 main:focus { outline: none; }
 .page-head, .section-head, .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -137,6 +139,15 @@ body:has(dialog[open]) { overflow: hidden; }
 .sheet-head { border-bottom: 1px solid var(--rule); }
 .sheet-head h2 { font: 550 1.6rem var(--serif); letter-spacing: -.04em; }
 .sheet-body { padding: 16px 22px 20px; display: grid; gap: 16px; }
+.pair-body section, .pair-body form { display: grid; gap: 9px; }
+.pair-body h3 { margin: 0; font-size: 1rem; }
+.pair-body section p, .pair-body form p, #code-expiration { color: var(--muted); font-size: .87rem; line-height: 1.45; }
+.pair-body form { border-top: 1px solid var(--rule); padding-top: 16px; }
+.pair-body button { justify-self: start; }
+.pair-result { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; background: #eaf0f6; padding: 8px 12px; border-radius: 10px; }
+#issued-code { font: 650 1.1rem monospace; letter-spacing: .06em; user-select: all; }
+#code-expiration { flex-basis: 100%; }
+#join-code { text-transform: uppercase; }
 .sheet-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; border-top: 1px solid var(--rule); }
 .delete-button { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; min-height: 44px; padding: 0; font-size: .84rem; color: #934239; }
 .delete-button svg { width: 17px; height: 17px; }
@@ -192,6 +203,8 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
   .sheet-actions { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 350px) {
+  .date-shortcut span, .devices-button svg { display: none; }
+  .date-shortcut { min-width: 32px; justify-content: center; }
   .page-head h1 { font-size: 1.85rem; }
   .meta-fields { grid-template-columns: 1fr; }
 }
