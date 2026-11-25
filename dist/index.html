@@ -13,6 +13,7 @@
   <style>
     .login-screen{min-height:100dvh;display:grid;place-items:center;padding:24px}
     .login-card{width:min(100%,380px);display:grid;gap:17px;padding:32px 26px;background:#fffefa;border:1px solid #dedacf;border-radius:20px;box-shadow:0 12px 45px #25354d10}
+    .remember-login{display:flex;align-items:center;gap:9px;font-size:.9rem;cursor:pointer}.remember-login input{width:19px;height:19px;accent-color:#294e95;margin:0}
     .login-card img{margin:auto}.login-card h1,.login-card>p{text-align:center}.login-card h1{font-size:2.4rem;color:#243c64}.login-card>p{font-size:.9rem;color:#606975}.login-card .primary{width:100%}
   </style>
   <script src="./app.js" defer></script>
@@ -25,6 +26,7 @@
       <p>Συνδέσου για να ανοίξεις τις σημειώσεις σου.</p>
       <label class="field">Username<input id="login-username" type="text" autocomplete="username" required autocapitalize="none" spellcheck="false"></label>
       <label class="field">Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <label class="remember-login"><input id="login-remember" type="checkbox" checked> Να με θυμάσαι</label>
       <p id="login-error" class="form-error" role="alert" hidden></p>
       <button type="submit" class="primary" id="login-submit">Σύνδεση</button>
     </form>

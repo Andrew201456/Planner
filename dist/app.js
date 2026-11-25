@@ -11,16 +11,18 @@ async function startPlanner() {
     import("./model.mjs"), import("./store.mjs")
   ]);
   let session;
-  try { session=await restoreSession(); } catch {}
+  let restoreError="";
+  try { session=await restoreSession(); } catch(error) { restoreError=error.message||"Δεν ήταν δυνατός ο έλεγχος σύνδεσης."; }
   if (!session) {
     const login=$("login-screen"), form=$("login-form"), error=$("login-error"), submit=$("login-submit");
     login.hidden=false;
+    if(restoreError){error.textContent=restoreError;error.hidden=false;}
     session=await new Promise(resolve=>{
       form.addEventListener("submit",async event=>{
         event.preventDefault(); if(submit.disabled)return;
         submit.disabled=true; error.hidden=true;
         try {
-          const token=await signIn($("login-username").value,$("login-password").value);
+          const token=await signIn($("login-username").value,$("login-password").value,$("login-remember")?.checked!==false);
           $("login-password").value=""; login.hidden=true; resolve(token);
         } catch(e) { error.textContent=e.message||"Αποτυχία σύνδεσης.";error.hidden=false; }
         finally {submit.disabled=false;}
