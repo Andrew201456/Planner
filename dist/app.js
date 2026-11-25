@@ -385,25 +385,32 @@ async function startPlanner() {
   document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
   if ($("devices")) {
     const dialog = $("devices-dialog"), issue = $("create-code");
-    const submit = $("join-form").querySelector("[type=submit]");
+    const submit = $("join-form").querySelector("[type=submit]"), check = $("check-cloud");
     let expires = 0;
     $("devices").addEventListener("click", () => {
       formError("pair-error");
+      $("cloud-status").hidden = true;
       if (Date.now() >= expires) $("pair-result").hidden = true;
       dialog.showModal();
     });
     async function pairingAction(action) {
-      if (issue.disabled || submit.disabled) return;
+      if (issue.disabled || submit.disabled || check.disabled) return;
       formError("pair-error");
-      issue.disabled = submit.disabled = true;
+      issue.disabled = submit.disabled = check.disabled = true;
       try {
         if (!store) throw new Error(storageMessage);
         await action();
       } catch (error) {
         formError("pair-error", error instanceof TypeError || error.name === "AbortError"
           ? "Έλεγξε τη σύνδεση στο διαδίκτυο και δοκίμασε ξανά." : error.message);
-      } finally { issue.disabled = submit.disabled = false; }
+      } finally { issue.disabled = submit.disabled = check.disabled = false; }
     }
+    check.addEventListener("click", () => pairingAction(async () => {
+      const stats = await store.diagnostics();
+      const result = $("cloud-status");
+      result.textContent = `Cloudflare D1 ✓ — ${stats.notes} σημειώσεις, ${stats.books} τετράδια αποθηκευμένα σε αυτό το Planner.`;
+      result.hidden = false;
+    }));
     issue.addEventListener("click", () => pairingAction(async () => {
       const invitation = await store.invite();
       expires = invitation.expires;
