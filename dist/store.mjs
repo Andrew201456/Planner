@@ -222,6 +222,17 @@ export async function openPlanner() {
 
   return {
     all: () => read(entries => entries.getAll()),
+    async diagnostics() {
+      if (!await sync() || await dirty()) {
+        throw new Error("Υπάρχουν αλλαγές που δεν έχουν περάσει ακόμη στη βάση. Δοκίμασε ξανά με σύνδεση.");
+      }
+      const stats = await api("diagnostics", {}, token);
+      if (stats?.ok !== true || stats.storage !== "D1" ||
+          !Number.isSafeInteger(stats.notes) || !Number.isSafeInteger(stats.books)) {
+        throw new Error("Η βάση δεν επιβεβαίωσε τις αποθηκευμένες σημειώσεις.");
+      }
+      return stats;
+    },
     async invite() {
       if (!await sync()) throw new Error("Σύνδεσε τη συσκευή στο διαδίκτυο για να δημιουργήσεις κωδικό.");
       const invitation = await api("pairing", { method: "POST" }, token);
