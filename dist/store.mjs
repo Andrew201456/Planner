@@ -6,8 +6,23 @@ const endpoint = location.hostname === "andrew-imerisio-planner.flutedcloth5.cha
   ? "https://planner.asmylonas8.workers.dev/api/" : "/api/";
 
 const sessionKey = "planner.account.session.v1";
-function remember(token) { try { localStorage.setItem(sessionKey,token); } catch {} }
-export function signOut() { try { localStorage.removeItem(sessionKey); } catch {} }
+function storedSession() {
+  for (const type of ["sessionStorage","localStorage"]) {
+    try { const token=window[type].getItem(sessionKey); if(token)return token; } catch {}
+  }
+  return null;
+}
+function remember(token,persistent) {
+  // Do not retain an old persistent session after an unchecked login.
+  signOut();
+  try { window[persistent?"localStorage":"sessionStorage"].setItem(sessionKey,token); }
+  catch { try { sessionStorage.setItem(sessionKey,token); } catch {} }
+}
+export function signOut() {
+  for (const type of ["sessionStorage","localStorage"]) {
+    try { window[type].removeItem(sessionKey); } catch {}
+  }
+}
 async function authRequest(path, options = {}, token) {
   const control = new AbortController();
   const timer = setTimeout(() => control.abort(),15000);
@@ -27,13 +42,13 @@ async function authRequest(path, options = {}, token) {
     return data;
   } finally { clearTimeout(timer); }
 }
-export async function signIn(username,password) {
+export async function signIn(username,password,persistent=true) {
   const data = await authRequest("login",{method:"POST",body:JSON.stringify({username,password})});
   if (typeof data.token !== "string") throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
-  remember(data.token); return data.token;
+  remember(data.token,persistent); return data.token;
 }
 export async function restoreSession() {
-  let token; try { token=localStorage.getItem(sessionKey); } catch {}
+  const token=storedSession();
   if (!token) return null;
   try {
     const data=await authRequest("session",{},token);
@@ -308,7 +323,7 @@ export async function openPlanner(token) {
       else window.addEventListener("storage", event => {
         if (event.key === channelName) otherTab();
       });
-      window.addEventListener("storage", event => { if (event.key===sessionKey && !event.newValue) location.reload(); });
+      window.addEventListener("storage", event => { if (event.key===sessionKey && !event.newValue && !storedSession()) location.reload(); });
       window.addEventListener("focus", kick);
       window.addEventListener("online", kick);
       window.addEventListener("offline", kick);
