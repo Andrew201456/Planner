@@ -10,9 +10,26 @@
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./style.css">
+  <style>
+    .login-screen{min-height:100dvh;display:grid;place-items:center;padding:24px}
+    .login-card{width:min(100%,380px);display:grid;gap:17px;padding:32px 26px;background:#fffefa;border:1px solid #dedacf;border-radius:20px;box-shadow:0 12px 45px #25354d10}
+    .login-card img{margin:auto}.login-card h1,.login-card>p{text-align:center}.login-card h1{font-size:2.4rem;color:#243c64}.login-card>p{font-size:.9rem;color:#606975}.login-card .primary{width:100%}
+  </style>
   <script src="./app.js" defer></script>
 </head>
 <body>
+  <section id="login-screen" hidden class="login-screen">
+    <form id="login-form" class="login-card">
+      <img src="./icon.svg" alt="" width="64" height="64">
+      <h1>Planner</h1>
+      <p>Συνδέσου για να ανοίξεις τις σημειώσεις σου.</p>
+      <label class="field">Username<input id="login-username" type="text" autocomplete="username" required autocapitalize="none" spellcheck="false"></label>
+      <label class="field">Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button type="submit" class="primary" id="login-submit">Σύνδεση</button>
+    </form>
+  </section>
+  <div id="planner-shell" hidden>
   <a class="skip" href="#content">Μετάβαση στο περιεχόμενο</a>
   <header class="app-header">
     <div class="header-inner">
@@ -22,48 +39,13 @@
         <a href="#calendar" id="nav-calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg>Ημερολόγιο</a>
       </nav>
       <a class="date-shortcut" id="today-shortcut" href="#calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span></span></a>
-      <button type="button" id="devices" class="devices-button" aria-haspopup="dialog">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="2" y="4" width="15" height="12" rx="2"/><path d="M6 20h6m-3-4v4"/><rect x="15" y="9" width="7" height="12" rx="1.5"/></svg>Συσκευές
-      </button>
+      <button type="button" id="logout" class="devices-button">Αποσύνδεση</button>
     </div>
   </header>
   <p class="sync-status" id="sync-status" role="status" hidden></p>
   <main id="content" tabindex="-1"></main>
   <noscript>Ενεργοποίησε τη JavaScript για να ανοίξεις το Planner.</noscript>
   <p class="toast" id="toast" role="status" hidden></p>
-
-  <dialog id="devices-dialog" aria-labelledby="devices-heading">
-    <div class="sheet-head">
-      <h2 id="devices-heading">Σύνδεση συσκευής</h2>
-      <button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button>
-    </div>
-    <div class="sheet-body pair-body">
-      <section>
-        <h3>Εδώ έχω τις σημειώσεις μου</h3>
-        <p>Δημιούργησε κωδικό για να ανοίξεις αυτό το Planner σε άλλη συσκευή.</p>
-        <button type="button" class="text-action" id="create-code">Δημιουργία κωδικού</button>
-        <div class="pair-result" id="pair-result" role="status" hidden>
-          <strong id="issued-code"></strong><button type="button" id="copy-code" class="text-action">Αντιγραφή</button>
-          <small id="code-expiration"></small>
-        </div>
-      </section>
-      <form id="join-form">
-        <h3>Έχω κωδικό από άλλη συσκευή</h3>
-        <label class="field">Κωδικός μίας χρήσης
-          <input id="join-code" type="text" lang="en" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" required>
-        </label>
-        <p>Οι σημειώσεις και τα δικά σου τετράδια από αυτήν τη συσκευή θα προστεθούν στο κοινό Planner.</p>
-        <button type="submit" class="primary">Σύνδεση</button>
-      </form>
-      <section>
-        <h3>Έλεγχος αποθήκευσης</h3>
-        <p>Έλεγξε απευθείας πόσες σημειώσεις και τετράδια βρίσκονται στη βάση Cloudflare D1 για αυτό το Planner. Κάθε μη συνδεδεμένος browser έχει ξεχωριστό χώρο.</p>
-        <button type="button" class="text-action" id="check-cloud">Έλεγχος Cloudflare D1</button>
-        <p id="cloud-status" class="cloud-status" role="status" hidden></p>
-      </section>
-      <p id="pair-error" class="form-error" role="alert" hidden></p>
-    </div>
-  </dialog>
 
   <dialog id="note-dialog" aria-labelledby="note-heading">
     <form id="note-form">
@@ -105,5 +87,6 @@
       <div class="sheet-actions"><button type="submit" class="primary">Δημιουργία</button></div>
     </form>
   </dialog>
+  </div>
 </body>
 </html>
