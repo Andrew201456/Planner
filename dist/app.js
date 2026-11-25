@@ -7,9 +7,28 @@ async function startPlanner() {
   const bookDialog = $("book-dialog");
   const noteForm = $("note-form");
   const bookForm = $("book-form");
-  const [{ colors, presets }, { openPlanner, legacyEntries }] = await Promise.all([
+  const [{ colors, presets }, { openPlanner, legacyEntries, signIn, restoreSession, signOut }] = await Promise.all([
     import("./model.mjs"), import("./store.mjs")
   ]);
+  let session;
+  try { session=await restoreSession(); } catch {}
+  if (!session) {
+    const login=$("login-screen"), form=$("login-form"), error=$("login-error"), submit=$("login-submit");
+    login.hidden=false;
+    session=await new Promise(resolve=>{
+      form.addEventListener("submit",async event=>{
+        event.preventDefault(); if(submit.disabled)return;
+        submit.disabled=true; error.hidden=true;
+        try {
+          const token=await signIn($("login-username").value,$("login-password").value);
+          $("login-password").value=""; login.hidden=true; resolve(token);
+        } catch(e) { error.textContent=e.message||"Αποτυχία σύνδεσης.";error.hidden=false; }
+        finally {submit.disabled=false;}
+      });
+    });
+  }
+  $("planner-shell").hidden=false;
+  $("logout").addEventListener("click",()=>{signOut();location.reload();});
   const unfiled = { id: "", name: "Χωρίς τετράδιο", color: "sky", icon: "pages" };
   const presetOrder = new Map(presets.map((book, index) => [book.id, index]));
   const presetIcons = new Map(presets.map(book => [book.id, book.icon]));
@@ -69,6 +88,7 @@ async function startPlanner() {
   function syncStatus(state) {
     const el = $("sync-status");
     const messages = {
+      ready: "Συγχρονισμένο με Cloudflare ✓",
       sending: "Αποθήκευση στο Cloudflare…",
       saved: "Αποθηκεύτηκε στο Cloudflare ✓",
       pending: "Οι αλλαγές είναι στη συσκευή. Θα περάσουν στη βάση μόλις επανέλθει η σύνδεση.",
@@ -77,7 +97,7 @@ async function startPlanner() {
     clearTimeout(statusTimer);
     el.textContent = messages[state] || "";
     el.hidden = !el.textContent;
-    if (state === "saved") statusTimer = setTimeout(() => { el.hidden = true; }, 1800);
+    // Keep the last confirmed cloud status visible.
   }
 
   function say(message) {
@@ -383,60 +403,6 @@ async function startPlanner() {
   });
 
   document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
-  if ($("devices")) {
-    const dialog = $("devices-dialog"), issue = $("create-code");
-    const submit = $("join-form").querySelector("[type=submit]"), check = $("check-cloud");
-    let expires = 0;
-    $("devices").addEventListener("click", () => {
-      formError("pair-error");
-      $("cloud-status").hidden = true;
-      if (Date.now() >= expires) $("pair-result").hidden = true;
-      dialog.showModal();
-    });
-    async function pairingAction(action) {
-      if (issue.disabled || submit.disabled || check.disabled) return;
-      formError("pair-error");
-      issue.disabled = submit.disabled = check.disabled = true;
-      try {
-        if (!store) throw new Error(storageMessage);
-        await action();
-      } catch (error) {
-        formError("pair-error", error instanceof TypeError || error.name === "AbortError"
-          ? "Έλεγξε τη σύνδεση στο διαδίκτυο και δοκίμασε ξανά." : error.message);
-      } finally { issue.disabled = submit.disabled = check.disabled = false; }
-    }
-    check.addEventListener("click", () => pairingAction(async () => {
-      const stats = await store.diagnostics();
-      const result = $("cloud-status");
-      result.textContent = `Cloudflare D1 ✓ — ${stats.notes} σημειώσεις, ${stats.books} τετράδια αποθηκευμένα σε αυτό το Planner.`;
-      result.hidden = false;
-    }));
-    issue.addEventListener("click", () => pairingAction(async () => {
-      const invitation = await store.invite();
-      expires = invitation.expires;
-      $("issued-code").textContent = invitation.code.match(/.{4}/g).join("-");
-      const time = new Intl.DateTimeFormat("el-GR", { hour: "2-digit", minute: "2-digit" }).format(expires);
-      $("code-expiration").textContent = "Ισχύει για μία σύνδεση, έως τις " + time + ".";
-      $("copy-code").textContent = "Αντιγραφή";
-      $("pair-result").hidden = false;
-    }));
-    $("copy-code").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText($("issued-code").textContent);
-        $("copy-code").textContent = "Αντιγράφηκε ✓";
-      } catch { formError("pair-error", "Πάτησε παρατεταμένα τον κωδικό για αντιγραφή."); }
-    });
-    $("join-form").addEventListener("submit", event => {
-      event.preventDefault();
-      pairingAction(async () => {
-        const already = await store.join($("join-code").value);
-        $("join-form").reset();
-        $("pair-result").hidden = true;
-        dialog.close();
-        say(already ? "Οι συσκευές έχουν ήδη το ίδιο Planner." : "Η συσκευή συνδέθηκε στο κοινό Planner.");
-      });
-    });
-  }
   document.querySelector(".skip").addEventListener("click", event => {
     event.preventDefault();
     main.focus();
@@ -450,7 +416,7 @@ async function startPlanner() {
       main.focus({ preventScroll: true });
     }
   });
-  try { store = await openPlanner(); }
+  try { store = await openPlanner(session); }
   catch { storageMessage = "Ο browser δεν επέτρεψε την αποθήκευση στη συσκευή. Άνοιξε ξανά το Planner για να αποθηκεύσεις αλλαγές."; }
   await reload();
   store?.start(reload, syncStatus, say);
