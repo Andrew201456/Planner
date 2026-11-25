@@ -101,6 +101,9 @@ h1 { font: 500 clamp(2.1rem,5vw,3.35rem)/1.08 var(--serif); letter-spacing: -.05
 .book-heading { display: flex; align-items: center; min-width: 0; gap: 12px; }
 .book-heading > svg { padding: 9px; width: 44px; height: 44px; border-radius: 13px; color: var(--pen); background: var(--cover); }
 .book-view { max-width: 790px; }
+.book-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; }
+.book-actions .back-link, .book-actions .delete-button { margin: 0; }
+.sync-status { margin: 0; padding: 8px 18px; background: #eaf0f6; color: #29435e; text-align: center; font-size: .84rem; }
 
 .calendar-panel { padding: clamp(14px,3vw,26px); background: #fffefa; border: 1px solid var(--rule); border-radius: 17px; }
 .calendar-top { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin-bottom: 12px; }

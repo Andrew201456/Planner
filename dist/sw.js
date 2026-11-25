@@ -1,8 +1,8 @@
 const scope = self.registration.scope;
 const prefix = "planner-shell:" + scope + ":";
-const version = prefix + "2";
+const version = prefix + "3";
 const files = [
-  "index.html", "style.css", "app.js", "icons.svg", "icon.svg", "manifest.webmanifest",
+  "index.html", "style.css", "app.js", "model.mjs", "store.mjs", "icons.svg", "icon.svg", "manifest.webmanifest",
   "icon-192.png", "icon-512.png"
 ].map(file => new URL(file, scope).href);
 const entry = files[0];

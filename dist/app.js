@@ -1,4 +1,4 @@
-function startPlanner() {
+async function startPlanner() {
   "use strict";
 
   const $ = id => document.getElementById(id);
@@ -7,23 +7,16 @@ function startPlanner() {
   const bookDialog = $("book-dialog");
   const noteForm = $("note-form");
   const bookForm = $("book-form");
-  const prefix = "planner.v1.";
-  const colors = {
-    butter: "Κίτρινο", sage: "Πράσινο", lilac: "Λιλά",
-    apricot: "Βερίκοκο", sky: "Γαλάζιο", rose: "Ροζ"
-  };
-  const presets = [
-    { id: "shopping", name: "Ψώνια", color: "butter", icon: "shopping" },
-    { id: "village", name: "Χωριό", color: "sage", icon: "village" },
-    { id: "personal", name: "Προσωπικά", color: "lilac", icon: "personal" },
-    { id: "ideas", name: "Ιδέες", color: "apricot", icon: "ideas" }
-  ];
+  const [{ colors, presets }, { openPlanner, legacyEntries }] = await Promise.all([
+    import("./model.mjs"), import("./store.mjs")
+  ]);
+  const unfiled = { id: "", name: "Χωρίς τετράδιο", color: "sky", icon: "pages" };
+  const presetOrder = new Map(presets.map((book, index) => [book.id, index]));
+  const presetIcons = new Map(presets.map(book => [book.id, book.icon]));
   const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   const html = value => String(value ?? "").replace(/[&<>"']/g, ch => entities[ch]);
   const icon = (name, css = "") => `<svg class="${css}" aria-hidden="true"><use href="./icons.svg#${name}"/></svg>`;
-  const keyFor = (type, id) => prefix + type + "." + id;
   const makeId = () => crypto.randomUUID();
-  const validId = id => typeof id === "string" && /^[a-zA-Z0-9-]{1,70}$/.test(id);
 
   const calFormat = options => new Intl.DateTimeFormat("el-GR", options);
   const monthFmt = calFormat({ month: "long", year: "numeric" });
@@ -36,7 +29,8 @@ function startPlanner() {
 
   let books = [...presets];
   let notes = [];
-  let rawNotes = new Map();
+  let versions = new Map();
+  let store, reading = 0, statusTimer;
   let storageMessage = "";
   let route = { view: "notes" };
   let selectedDay = localKey(new Date());
@@ -44,60 +38,46 @@ function startPlanner() {
   let kindChosen = false;
   let toastTimer;
 
-  function isNote(n) {
-    return n && validId(n.id) && validId(n.bookId) && typeof n.title === "string" &&
-      typeof n.text === "string" && ["text", "list"].includes(n.kind) &&
-      Array.isArray(n.items) && n.items.every(i => i && typeof i.label === "string" && typeof i.done === "boolean") &&
-      (n.date === "" || validDay(n.date)) && Number.isFinite(n.updated);
+  async function loadData() {
+    const ticket = ++reading;
+    const entries = store ? await store.all() : [
+      ...presets.map(value => ({ key: "book:" + value.id, value })), ...legacyEntries()
+    ];
+    if (ticket !== reading) return;
+    const loadedBooks = [], loadedNotes = [], nextVersions = new Map();
+    for (const { key, value, version } of entries) {
+      if (!value) continue;
+      nextVersions.set(key, version);
+      if (key.startsWith("note:")) loadedNotes.push(value);
+      else loadedBooks.push({ ...value, icon: presetIcons.get(value.id) || "pages" });
+    }
+    books = loadedBooks.sort((a, b) =>
+      (presetOrder.get(a.id) ?? 4) - (presetOrder.get(b.id) ?? 4) ||
+      a.created - b.created || a.name.localeCompare(b.name, "el"));
+    notes = loadedNotes.sort((a, b) => b.updated - a.updated || a.id.localeCompare(b.id));
+    versions = nextVersions;
   }
 
-  function loadData() {
-    const custom = [], loaded = [], raw = new Map();
-    try {
-      const storage = window.localStorage;
-      for (let i = 0; i < storage.length; i++) {
-        const key = storage.key(i);
-        if (!key?.startsWith(prefix)) continue;
-        const value = storage.getItem(key);
-        let item;
-        try { item = JSON.parse(value); } catch { continue; }
-        if (!item || !validId(item.id)) continue;
-        if (key === keyFor("note", item.id) && isNote(item)) {
-          loaded.push(item);
-          raw.set(item.id, value);
-        } else if (key === keyFor("book", item.id) && typeof item.name === "string" && Object.hasOwn(colors, item.color)) {
-          custom.push({ id: item.id, name: item.name, color: item.color, icon: "pages", created: item.created || 0 });
-        }
-      }
-      custom.sort((a, b) => a.created - b.created || a.name.localeCompare(b.name, "el"));
-      books = [...presets, ...custom];
-      notes = loaded.sort((a, b) => b.updated - a.updated || a.id.localeCompare(b.id));
-      rawNotes = raw;
-      storageMessage = "";
-    } catch {
-      storageMessage = "Η αποθήκευση στη συσκευή δεν είναι διαθέσιμη σε αυτό το παράθυρο.";
-    }
+  async function reload() { await loadData(); render(); }
+
+  async function write(type, id, record, expected) {
+    if (!store) throw new Error(storageMessage);
+    await store.save(type, id, record, expected);
+    await loadData();
   }
 
-  function write(type, id, record, expected) {
-    const key = keyFor(type, id);
-    let storage, previous;
-    try {
-      storage = window.localStorage;
-      previous = storage.getItem(key);
-    } catch {
-      throw new Error("Ο browser δεν επέτρεψε την αποθήκευση στη συσκευή.");
-    }
-    if (previous !== expected) {
-      throw new Error("Η καταχώρηση άλλαξε σε άλλη καρτέλα. Άνοιξέ την ξανά για να δεις την πιο πρόσφατη έκδοση.");
-    }
-    try {
-      if (record === null) storage.removeItem(key);
-      else storage.setItem(key, JSON.stringify(record));
-    } catch {
-      throw new Error("Η αποθήκευση απέτυχε. Έλεγξε τον διαθέσιμο χώρο και δοκίμασε ξανά.");
-    }
-    loadData();
+  function syncStatus(state) {
+    const el = $("sync-status");
+    const messages = {
+      sending: "Αποθήκευση στο Cloudflare…",
+      saved: "Αποθηκεύτηκε στο Cloudflare ✓",
+      pending: "Οι αλλαγές είναι στη συσκευή. Θα περάσουν στη βάση μόλις επανέλθει η σύνδεση.",
+      unavailable: "Η βάση είναι προσωρινά εκτός σύνδεσης. Βλέπεις το αντίγραφο της συσκευής."
+    };
+    clearTimeout(statusTimer);
+    el.textContent = messages[state] || "";
+    el.hidden = !el.textContent;
+    if (state === "saved") statusTimer = setTimeout(() => { el.hidden = true; }, 1800);
   }
 
   function say(message) {
@@ -123,7 +103,7 @@ function startPlanner() {
   }
 
   function bookFor(id) {
-    return books.find(b => b.id === id) || presets[2];
+    return books.find(b => b.id === id) || unfiled;
   }
 
   function newNoteButton() {
@@ -236,7 +216,8 @@ function startPlanner() {
         ${noteList(dated, "Δεν έχεις σημειώσεις για αυτή τη μέρα.")}</section></div>`;
     } else if (route.view === "book") {
       const b = route.book;
-      page = `<section class="book-view"><a href="#notes" class="back-link">${icon("back")}Όλα τα τετράδια</a>
+      page = `<section class="book-view"><div class="book-actions"><a href="#notes" class="back-link">${icon("back")}Όλα τα τετράδια</a>
+        <button type="button" class="delete-button" data-delete-book>${icon("trash")}Διαγραφή τετραδίου</button></div>
         <div class="page-head"><div class="book-heading color-${b.color}">${icon(b.icon)}<h1>${html(b.name)}</h1></div>${newNoteButton()}</div>
         ${noteList(notes.filter(n => n.bookId === b.id), "Δεν έχεις γράψει ακόμα σε αυτό το τετράδιο.")}</section>`;
     } else {
@@ -264,13 +245,13 @@ function startPlanner() {
 
   function openEditor(id) {
     const n = id ? notes.find(note => note.id === id) : null;
-    if (id && !n) { loadData(); render(); return; }
-    const bookId = n?.bookId ?? route.book?.id ?? "personal";
-    editing = n ? { note: n, original: rawNotes.get(id) } : null;
+    if (id && !n) { reload(); return; }
+    const bookId = bookFor(n?.bookId ?? route.book?.id ?? "personal").id;
+    editing = n ? { note: n, original: versions.get("note:" + id) } : null;
     kindChosen = !!n;
     noteForm.reset();
     $("note-heading").textContent = n ? "Επεξεργασία σημείωσης" : "Νέα σημείωση";
-    $("note-book").replaceChildren(...books.map(b => new Option(b.name, b.id)));
+    $("note-book").replaceChildren(...[...books, unfiled].map(b => new Option(b.name, b.id)));
     $("note-book").value = bookId;
     noteForm.elements.kind.value = n?.kind ?? (bookId === "shopping" ? "list" : "text");
     updateBodyLabel();
@@ -294,7 +275,7 @@ function startPlanner() {
       .map(label => ({ label, done: matching.get(label)?.shift() ?? false }));
   }
 
-  noteForm.addEventListener("submit", event => {
+  noteForm.addEventListener("submit", async event => {
     event.preventDefault();
     const title = $("note-title").value.trim();
     const body = $("note-body").value.trim();
@@ -307,22 +288,25 @@ function startPlanner() {
     if (date && !validDay(date)) {
       formError("note-error", "Διάλεξε μια έγκυρη ημερομηνία."); return;
     }
+    if (noteForm.dataset.saving) return;
+    noteForm.dataset.saving = "1";
     try {
       const id = editing?.note.id ?? makeId();
       const next = {
         id, title, kind, date, bookId: $("note-book").value, text: kind === "text" ? body : "",
         items: kind === "list" ? checklistItems(body, editing?.note.items ?? []) : [], updated: Date.now()
       };
-      write("note", id, next, editing?.original ?? null);
+      await write("note", id, next, editing?.original ?? null);
     } catch (error) { formError("note-error", error.message); return; }
+    finally { delete noteForm.dataset.saving; }
     noteDialog.close();
     render();
-    say("Η σημείωση αποθηκεύτηκε.");
+    say("Η σημείωση καταχωρήθηκε.");
   });
 
-  $("delete-note").addEventListener("click", () => {
+  $("delete-note").addEventListener("click", async () => {
     if (!editing || !window.confirm("Να διαγραφεί η σημείωση «" + titleOf(editing.note) + "»;")) return;
-    try { write("note", editing.note.id, null, editing.original); }
+    try { await write("note", editing.note.id, null, editing.original); }
     catch (error) { formError("note-error", error.message); return; }
     noteDialog.close();
     render();
@@ -341,40 +325,59 @@ function startPlanner() {
     `<label class="swatch color-${key}" title="${name}"><input type="radio" name="color" value="${key}" aria-label="${name}" ${i === 0 ? "checked" : ""}><span>${icon("check")}</span></label>`
   ).join("");
 
-  bookForm.addEventListener("submit", event => {
+  bookForm.addEventListener("submit", async event => {
     event.preventDefault();
     const name = $("book-name").value.trim();
     if (!name || books.some(b => b.name.localeCompare(name, "el", { sensitivity: "base" }) === 0)) {
       formError("book-error", name ? "Υπάρχει ήδη τετράδιο με αυτό το όνομα." : "Δώσε όνομα στο τετράδιο."); return;
     }
+    if (bookForm.dataset.saving) return;
+    bookForm.dataset.saving = "1";
     try {
       const id = makeId();
-      write("book", id, { id, name, color: bookForm.elements.color.value, created: Date.now() }, null);
+      await write("book", id, { id, name, color: bookForm.elements.color.value, created: Date.now() }, null);
       bookDialog.close();
       location.hash = "book/" + id;
       say("Το τετράδιο δημιουργήθηκε.");
     } catch (error) { formError("book-error", error.message); }
+    finally { delete bookForm.dataset.saving; }
   });
+
+  async function deleteBook() {
+    if (route.view !== "book") return;
+    const book = route.book;
+    const hasNotes = notes.some(note => note.bookId === book.id);
+    const message = "Να διαγραφεί το τετράδιο «" + book.name + "»;" +
+      (hasNotes ? " Οι σημειώσεις του θα μείνουν στις Πρόσφατες ως «Χωρίς τετράδιο»." : "");
+    if (!window.confirm(message)) return;
+    try {
+      await write("book", book.id, null, versions.get("book:" + book.id));
+      location.hash = "notes";
+      render();
+      say("Το τετράδιο διαγράφηκε.");
+    } catch (error) { say(error.message); }
+  }
 
   main.addEventListener("click", event => {
     const button = event.target.closest("button");
     if (!button) return;
     if (button.hasAttribute("data-new-note")) openEditor();
     else if (button.dataset.edit) openEditor(button.dataset.edit);
+    else if (button.hasAttribute("data-delete-book")) deleteBook();
     else if (button.hasAttribute("data-new-book")) {
       bookForm.reset(); formError("book-error"); bookDialog.showModal();
     }
   });
 
-  main.addEventListener("change", event => {
+  main.addEventListener("change", async event => {
     const box = event.target;
     if (!box.matches("[data-check]")) return;
     const n = notes.find(note => note.id === box.dataset.check);
     const index = Number(box.dataset.index);
     if (!n || !n.items[index]) return;
     const items = n.items.map((item, i) => i === index ? { ...item, done: box.checked } : item);
-    try { write("note", n.id, { ...n, items, updated: Date.now() }, rawNotes.get(n.id)); }
-    catch (error) { say(error.message); loadData(); }
+    try { await write("note", n.id, { ...n, items, updated: Date.now() }, versions.get("note:" + n.id)); }
+    catch (error) { say(error.message); await loadData(); }
     render();
     main.querySelector(`[data-check="${n.id}"][data-index="${index}"]`)?.focus({ preventScroll: true });
   });
@@ -393,18 +396,15 @@ function startPlanner() {
       main.focus({ preventScroll: true });
     }
   });
-  window.addEventListener("storage", event => {
-    if (!event.key || event.key.startsWith(prefix)) { loadData(); render(); }
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) { loadData(); render(); }
-  });
-
-  loadData();
-  render();
+  try { store = await openPlanner(); }
+  catch { storageMessage = "Ο browser δεν επέτρεψε την αποθήκευση στη συσκευή. Άνοιξε ξανά το Planner για να αποθηκεύσεις αλλαγές."; }
+  await reload();
+  store?.start(reload, syncStatus);
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
 }
 
-startPlanner();
+startPlanner().catch(() => {
+  document.getElementById("content").textContent = "Το Planner δεν μπόρεσε να ανοίξει. Δοκίμασε ανανέωση της σελίδας.";
+});

@@ -24,6 +24,7 @@
       <a class="date-shortcut" id="today-shortcut" href="#calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span></span></a>
     </div>
   </header>
+  <p class="sync-status" id="sync-status" role="status" hidden></p>
   <main id="content" tabindex="-1"></main>
   <noscript>Ενεργοποίησε τη JavaScript για να ανοίξεις το Planner.</noscript>
   <p class="toast" id="toast" role="status" hidden></p>
@@ -43,7 +44,7 @@
         <label class="field">Τίτλος <input id="note-title" type="text" maxlength="160" placeholder="Τίτλος (προαιρετικά)" autofocus></label>
         <label class="field"><span id="body-label">Σημείωση</span><textarea id="note-body" rows="5" maxlength="20000" placeholder="Γράψε εδώ…"></textarea></label>
         <div class="meta-fields">
-          <label class="field">Τετράδιο <select id="note-book" required></select></label>
+          <label class="field">Τετράδιο <select id="note-book"></select></label>
           <label class="field">Ημερομηνία <input id="note-date" type="date" min="0001-01-01" max="9999-12-31"></label>
         </div>
         <p class="form-error" id="note-error" role="alert" hidden></p>
