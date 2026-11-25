@@ -128,9 +128,12 @@ export default {
         if (!input || typeof input.legacyToken !== "string" || !/^[0-9a-f]{64}$/.test(input.legacyToken)) return json({error:"legacy_token"},400);
         const device = await digest(input.legacyToken);
         const previous = await env.DB.prepare("SELECT planner_id FROM planner_devices WHERE device_id = ?").bind(device).first("planner_id") ?? device;
-        // Retain the original namespace. Never overwrite current account rows or tombstones.
-        await env.DB.prepare(`INSERT OR IGNORE INTO planner_records (planner_id,record_key,version,data)
-          SELECT ?,record_key,version,data FROM planner_records WHERE planner_id = ?`).bind(owner,previous).run();
+        // Retain the original namespace. Only replace untouched seed notebooks; never overwrite account edits or tombstones.
+        await env.DB.prepare(`INSERT INTO planner_records (planner_id,record_key,version,data)
+          SELECT ?,record_key,version,data FROM planner_records WHERE planner_id = ?
+          ON CONFLICT(planner_id,record_key) DO UPDATE SET version=excluded.version,data=excluded.data
+          WHERE planner_records.version = '0000000000000000-00000000-0000-4000-8000-000000000000'
+          AND excluded.version > planner_records.version`).bind(owner,previous).run();
         return json({ok:true});
       }
       if (url.pathname === "/api/diagnostics") {
