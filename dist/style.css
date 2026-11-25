@@ -212,3 +212,19 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
   .primary .note-word { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+
+/* Food diary uses a separate green accent, independent of notebook colors. */
+.food-layout{max-width:680px;margin:auto}
+.food-date-bar{display:flex;align-items:center;gap:12px;background:#fffefa;border:1px solid var(--rule);border-radius:16px;padding:12px}
+.food-date-bar label{flex:1;min-width:0;text-align:center}.food-date-bar input{text-align:center}.food-date-bar .icon-button{flex:none}
+.food-links{display:flex;justify-content:space-between;gap:10px;margin:4px 0 10px}
+.food-panel{background:#fffefa;border:1px solid #bfd4bd;border-radius:16px;padding:16px;margin:18px 0;color:#35583f}
+.food-panel h2{display:flex;align-items:center;gap:8px}.food-panel .text-action{color:#35583f}
+.food-total{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#edf4ea;border-radius:12px;padding:12px;font-size:.85rem}
+.food-total strong{font-size:1.2rem;white-space:nowrap}.food-total small,.food-list small{display:block;color:var(--muted);font-size:.78rem;margin-top:4px}
+.food-list{list-style:none;padding:0;margin:10px 0 0}.food-list li{display:flex;align-items:center;gap:10px;padding:10px 0}.food-list li+li{border-top:1px solid var(--rule)}.food-list li>div{flex:1;min-width:0;overflow-wrap:anywhere}.food-list .icon-button{flex:none}
+.food-bullet,.food-legend i{width:8px;height:8px;display:inline-block;border-radius:50%;background:#47854d;flex:none}.food-legend{font-size:.75rem;color:var(--muted);margin-top:12px;display:flex;align-items:center;gap:6px}.dots .food-dot{background:#47854d;border-radius:2px}
+.food-empty{color:var(--muted);font-size:.88rem;padding:17px 0 4px}
+@media(max-width:950px) and (min-width:731px){.header-inner{gap:12px}.main-nav{margin-left:0;gap:1px}.main-nav a{padding-inline:8px}.date-shortcut span{display:none}}
+@media(max-width:730px){.header-inner{flex-wrap:wrap;gap:0 8px;padding-top:calc(8px + env(safe-area-inset-top));}.main-nav{position:static;order:5;flex-basis:100%;gap:5px;padding:6px 0;border:0;background:transparent;justify-content:stretch}.main-nav a{max-width:none;white-space:nowrap;gap:5px}.main-nav a svg{width:17px;height:17px}main{padding-bottom:calc(38px + env(safe-area-inset-bottom))}.toast{bottom:calc(18px + env(safe-area-inset-bottom))}}
+@media(max-width:350px){.main-nav a{font-size:.75rem;gap:3px}.main-nav a svg{width:15px;height:15px}.food-total{flex-wrap:wrap}}

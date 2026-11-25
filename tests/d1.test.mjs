@@ -74,3 +74,20 @@ test("authenticated migration preserves old namespace and existing account recor
   assert.equal((await call(auth,"migrate","POST",{legacyToken})).status,200);
   assert.equal((await (await call(auth,"diagnostics")).json()).books,1);
 });
+
+test("food records sync independently without breaking old clients", async()=>{
+  const env={...database(),PASSWORD:"test-only-password"};
+  const call=(token,path,method="GET",data)=>worker.fetch(new Request("https://planner.test/api/"+path,{
+    method,headers:token?{Authorization:"Bearer "+token}:{},body:data?JSON.stringify(data):undefined
+  }),env);
+  const login=async()=>(await (await call(null,"login","POST",{username:"markarv",password:env.PASSWORD})).json()).token;
+  const a=await login(),b=await login();
+  const version=n=>String(n).padStart(16,"0")+"-00000000-0000-4000-8000-000000000000";
+  const meal={key:"food:meal-a",version:version(1),value:{id:"meal-a",name:"Toast",date:"2026-11-25",calories:null,created:1,updated:1}};
+  assert.equal((await call(a,"planner","PUT",meal)).status,200);
+  assert.deepEqual((await (await call(b,"planner?types=all")).json()).records,[meal]);
+  assert.deepEqual((await (await call(b,"planner")).json()).records,[]);
+  assert.equal((await call(a,"planner","PUT",{...meal,value:{...meal.value,date:"2026-02-30"}})).status,400);
+  assert.equal((await call(b,"planner","PUT",{...meal,version:version(2),value:null,base:meal.version})).status,200);
+  assert.equal((await (await call(a,"planner?types=all")).json()).records[0].value,null);
+});

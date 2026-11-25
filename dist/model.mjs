@@ -10,7 +10,7 @@ export const presets = [
   { id: "ideas", name: "Ιδέες", color: "apricot", icon: "ideas", created: 0 }
 ];
 
-export const validKey = key => typeof key === "string" && /^(book|note):[A-Za-z0-9-]{1,70}$/.test(key);
+export const validKey = key => typeof key === "string" && /^(book|note|food):[A-Za-z0-9-]{1,70}$/.test(key);
 export const validVersion = version => typeof version === "string" &&
   /^\d{16}-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/.test(version);
 
@@ -21,6 +21,12 @@ export function validRecord(key, value) {
   if (!value || value.id !== id) return false;
   if (type === "book") return typeof value.name === "string" && value.name.trim().length > 0 &&
     value.name.length <= 45 && Object.hasOwn(colors, value.color) && Number.isSafeInteger(value.created);
+  if (type === "food") return typeof value.name === "string" && value.name.trim().length > 0 &&
+    value.name.length <= 300 && typeof value.date === "string" &&
+    /^\d{4}-\d\d-\d\d$/.test(value.date) && !value.date.startsWith("0000") &&
+    Number.isFinite(Date.parse(value.date)) && new Date(value.date).toISOString().slice(0,10) === value.date &&
+    (value.calories === null || Number.isSafeInteger(value.calories) && value.calories >= 0 && value.calories <= 100000) &&
+    Number.isSafeInteger(value.created) && Number.isSafeInteger(value.updated);
   const { title, text, kind, items, date, bookId, updated } = value;
   if (typeof title !== "string" || title.length > 160 || typeof text !== "string" || text.length > 20000 ||
       !["text", "list"].includes(kind) || !Array.isArray(items) || items.length > 10000 ||

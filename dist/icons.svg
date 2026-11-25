@@ -17,4 +17,5 @@
   <symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13m-8 3v7m4-7v7"/></symbol>
   <symbol id="pencil" viewBox="0 0 24 24"><path d="m4 15 11.5-11.5a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L9 20l-6 1 1-6Zm9.5-9.5 5 5"/></symbol>
   <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="food" viewBox="0 0 24 24"><path d="M4 3v6a3 3 0 0 0 6 0V3M7 3v18M20 3c-3 0-5 4-5 8h5v10"/></symbol>
 </svg>

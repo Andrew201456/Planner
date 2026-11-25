@@ -49,7 +49,9 @@ async function startPlanner() {
   const validDay = iso => typeof iso === "string" && /^\d{4}-\d\d-\d\d$/.test(iso) && !iso.startsWith("0000") && localKey(parseDay(iso)) === iso;
 
   let books = [...presets];
-  let notes = [];
+  let notes = [], foods = [];
+  let foodDay = localKey(new Date()), foodEditing = null;
+  const foodDialog = $("food-dialog"), foodForm = $("food-form");
   let versions = new Map();
   let store, reading = 0, statusTimer;
   let storageMessage = "";
@@ -65,17 +67,19 @@ async function startPlanner() {
       ...presets.map(value => ({ key: "book:" + value.id, value })), ...legacyEntries()
     ];
     if (ticket !== reading) return;
-    const loadedBooks = [], loadedNotes = [], nextVersions = new Map();
+    const loadedBooks = [], loadedNotes = [], loadedFoods = [], nextVersions = new Map();
     for (const { key, value, version } of entries) {
       if (!value) continue;
       nextVersions.set(key, version);
       if (key.startsWith("note:")) loadedNotes.push(value);
-      else loadedBooks.push({ ...value, icon: presetIcons.get(value.id) || "pages" });
+      else if (key.startsWith("food:")) loadedFoods.push(value);
+      else if (key.startsWith("book:")) loadedBooks.push({ ...value, icon: presetIcons.get(value.id) || "pages" });
     }
     books = loadedBooks.sort((a, b) =>
       (presetOrder.get(a.id) ?? 4) - (presetOrder.get(b.id) ?? 4) ||
       a.created - b.created || a.name.localeCompare(b.name, "el"));
     notes = loadedNotes.sort((a, b) => b.updated - a.updated || a.id.localeCompare(b.id));
+    foods = loadedFoods.sort((a,b)=>a.created-b.created || a.id.localeCompare(b.id));
     versions = nextVersions;
   }
 
@@ -116,6 +120,11 @@ async function startPlanner() {
       const date = hash.split("/")[1];
       if (validDay(date)) selectedDay = date;
       return { view: "calendar" };
+    }
+    if (hash === "food" || hash.startsWith("food/")) {
+      const date = hash.split("/")[1];
+      foodDay = validDay(date) ? date : localKey(new Date());
+      return { view: "food" };
     }
     if (hash.startsWith("book/")) {
       const book = books.find(b => b.id === hash.slice(5));
@@ -193,6 +202,7 @@ async function startPlanner() {
       if (!dated.has(n.date)) dated.set(n.date, []);
       dated.get(n.date).push(n);
     }
+    const foodDates = new Set(foods.map(f=>f.date));
     const days = [];
     for (let i = 0; i < cells; i++, day.setDate(day.getDate() + 1)) {
       const date = localKey(day);
@@ -201,8 +211,9 @@ async function startPlanner() {
       const dots = [...new Set(list.map(n => bookFor(n.bookId).color))].slice(0, 3);
       const isToday = date === today;
       const classes = ["day", day.getMonth() !== selected.getMonth() ? "outside" : "", isToday ? "today" : "", !mini && date === iso ? "selected" : ""].filter(Boolean).join(" ");
-      const label = shortFmt.format(day) + (isToday ? ", σήμερα" : "") + (list.length ? `, ${list.length} ${list.length === 1 ? "σημείωση" : "σημειώσεις"}` : "");
-      days.push(`<a class="${classes}" href="#calendar/${date}" aria-label="${label}" ${isToday ? 'aria-current="date"' : ""}>${day.getDate()}<span class="dots" aria-hidden="true">${dots.map(c => `<i class="color-${c}"></i>`).join("")}</span></a>`);
+      const hasFood = foodDates.has(date);
+      const label = shortFmt.format(day) + (isToday ? ", σήμερα" : "") + (list.length ? `, ${list.length} ${list.length === 1 ? "σημείωση" : "σημειώσεις"}` : "") + (hasFood ? ", φαγητό" : "");
+      days.push(`<a class="${classes}" href="#calendar/${date}" aria-label="${label}" ${isToday ? 'aria-current="date"' : ""}>${day.getDate()}<span class="dots" aria-hidden="true">${dots.map(c => `<i class="color-${c}"></i>`).join("")}${hasFood ? '<i class="food-dot"></i>' : ""}</span></a>`);
     }
     function arrow(step) {
       const dir = step < 0 ? "left" : "right";
@@ -213,8 +224,72 @@ async function startPlanner() {
     return `<section class="calendar-panel" aria-label="Μηνιαίο ημερολόγιο">
       <div class="calendar-top"><h2>${monthFmt.format(selected)}</h2><div class="month-buttons">${arrow(-1)}${arrow(1)}</div></div>
       <div class="weekdays" aria-hidden="true">${["Δε", "Τρ", "Τε", "Πε", "Πα", "Σα", "Κυ"].map(d => `<span>${d}</span>`).join("")}</div>
-      <div class="days">${days.join("")}</div></section>`;
+      <div class="days">${days.join("")}</div>${!mini ? '<p class="food-legend"><i></i> Καταγραφή φαγητού</p>' : ""}</section>`;
   }
+
+  function foodList(day, compact = false) {
+    const list = foods.filter(f=>f.date===day);
+    const known = list.filter(f=>f.calories!==null);
+    const total = known.reduce((sum,f)=>sum+f.calories,0);
+    const summary = known.length ? total.toLocaleString("el-GR")+" kcal" : "—";
+    return `<section class="food-panel">
+      <div class="section-head"><h2>${icon("food")} Τι τρώω</h2><button class="text-action" type="button" data-food-add="${day}">${icon("plus")} Προσθήκη</button></div>
+      <div class="food-total"><span>Καταγεγραμμένες θερμίδες <small>${list.length} καταχωρήσεις${known.length<list.length ? " · "+(list.length-known.length)+" χωρίς θερμίδες" : ""}</small></span><strong>${summary}</strong></div>
+      ${list.length ? '<ul class="food-list">'+list.map(f=>`<li><span class="food-bullet"></span><div><strong>${html(f.name)}</strong><small>${f.calories===null ? "Χωρίς θερμίδες" : f.calories.toLocaleString("el-GR")+" kcal"}</small></div><button type="button" class="icon-button" data-food-edit="${f.id}" aria-label="Επεξεργασία: ${html(f.name)}">${icon("pencil")}</button></li>`).join("")+'</ul>' : '<p class="food-empty">Δεν έχεις καταχωρήσει φαγητό για αυτή τη μέρα.</p>'}
+      ${compact ? `<a class="text-action" href="#food/${day}">Άνοιγμα ημερολογίου φαγητού ${icon("arrow")}</a>` : ""}
+    </section>`;
+  }
+  function shiftDay(iso,step) {
+    const d=parseDay(iso);d.setDate(d.getDate()+step);return localKey(d);
+  }
+  function renderFood(today) {
+    const before=shiftDay(foodDay,-1), after=shiftDay(foodDay,1);
+    return `<div class="page-head"><h1>Τι τρώω</h1><button class="primary" type="button" data-food-add="${foodDay}">${icon("plus")} Φαγητό</button></div>
+      <div class="food-layout"><div class="food-date-bar"><a class="icon-button" href="#food/${validDay(before)?before:foodDay}" aria-label="Προηγούμενη ημέρα">${icon("left")}</a>
+        <label class="field"><span>${foodDay===today?"Σήμερα":dayFmt.format(parseDay(foodDay))}</span><input id="food-day" type="date" min="0001-01-01" max="9999-12-31" value="${foodDay}" aria-label="Ημερομηνία φαγητού"></label>
+        <a class="icon-button" href="#food/${validDay(after)?after:foodDay}" aria-label="Επόμενη ημέρα">${icon("right")}</a></div>
+        <div class="food-links"><a class="text-action" href="#food/${today}">Σήμερα</a><a class="text-action" href="#calendar/${foodDay}">${icon("calendar")} Στο ημερολόγιο</a></div>
+        ${foodList(foodDay)}</div>`;
+  }
+
+  function openFoodEditor(day,id) {
+    if (!foodDialog || !foodForm) return;
+    const existing=id ? foods.find(f=>f.id===id) : null;
+    if(id&&!existing)return;
+    foodEditing=existing ? {id,version:versions.get("food:"+id),created:existing.created} : null;
+    foodForm.reset();
+    $("food-heading").textContent=existing?"Επεξεργασία φαγητού":"Νέα καταχώρηση φαγητού";
+    $("food-name").value=existing?.name??"";
+    $("food-calories").value=existing?.calories??"";
+    $("food-date").value=existing?.date??day;
+    $("delete-food").hidden=!existing;
+    formError("food-error");foodDialog.showModal();
+  }
+  foodForm?.addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(foodForm.dataset.saving)return;
+    const name=$("food-name").value.trim(),day=$("food-date").value,raw=$("food-calories").value;
+    const calories=raw===""?null:Number(raw);
+    if(!name||!validDay(day)||calories!==null&&(!Number.isSafeInteger(calories)||calories<0||calories>100000)){
+      formError("food-error","Συμπλήρωσε φαγητό και έγκυρη ημερομηνία. Οι θερμίδες είναι προαιρετικές.");return;
+    }
+    foodForm.dataset.saving="1";
+    try{
+      const id=foodEditing?.id??makeId(),now=Date.now();
+      await write("food",id,{id,name,date:day,calories,created:foodEditing?.created??now,updated:now},foodEditing?.version??null);
+      foodDialog.close();
+      location.hash=(route.view==="calendar"?"calendar/":"food/")+day;
+      render();say("Το φαγητό καταχωρήθηκε.");
+    }catch(error){formError("food-error",error.message);}
+    finally{delete foodForm.dataset.saving;}
+  });
+  $("delete-food")?.addEventListener("click",async()=>{
+    if(!foodEditing||foodForm.dataset.saving||!window.confirm("Να διαγραφεί αυτή η καταχώρηση φαγητού;"))return;
+    foodForm.dataset.saving="1";
+    try{await write("food",foodEditing.id,null,foodEditing.version);foodDialog.close();render();say("Η καταχώρηση διαγράφηκε.");}
+    catch(error){formError("food-error",error.message);}
+    finally{delete foodForm.dataset.saving;}
+  });
 
   function render() {
     route = readRoute();
@@ -223,9 +298,10 @@ async function startPlanner() {
     $("today-shortcut").href = todayUrl;
     $("today-shortcut").lastElementChild.textContent = headerFmt.format(parseDay(today));
     $("today-shortcut").setAttribute("aria-label", "Σήμερα, " + shortFmt.format(parseDay(today)));
-    for (const tab of ["notes", "calendar"]) {
-      const active = tab === (route.view === "calendar" ? "calendar" : "notes");
+    for (const tab of ["notes", "calendar", "food"]) {
+      const active = tab === (route.view === "book" ? "notes" : route.view);
       const link = $("nav-" + tab);
+      if (!link) continue;
       if (active) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     }
@@ -235,7 +311,10 @@ async function startPlanner() {
       page = `<div class="page-head"><h1>Ημερολόγιο</h1>${newNoteButton()}</div>
         <div class="calendar-layout">${calendarGrid(selectedDay)}
         <section><div class="section-head"><h2 class="selected-day-title">${dayFmt.format(parseDay(selectedDay))}</h2><a href="${todayUrl}" class="today-link">Σήμερα</a></div>
-        ${noteList(dated, "Δεν έχεις σημειώσεις για αυτή τη μέρα.")}</section></div>`;
+        ${noteList(dated, "Δεν έχεις σημειώσεις για αυτή τη μέρα.")}
+        ${foodList(selectedDay,true)}</section></div>`;
+    } else if (route.view === "food") {
+      page = renderFood(today);
     } else if (route.view === "book") {
       const b = route.book;
       page = `<section class="book-view"><div class="book-actions"><a href="#notes" class="back-link">${icon("back")}Όλα τα τετράδια</a>
@@ -250,7 +329,7 @@ async function startPlanner() {
         <aside class="mini-calendar"><div class="section-head"><h2>Ημερολόγιο</h2><a href="${todayUrl}" class="text-action" aria-label="Άνοιγμα ημερολογίου">${icon("arrow")}</a></div>${calendarGrid(today, true)}</aside></div>`;
     }
     main.innerHTML = (storageMessage ? `<p class="storage-error" role="alert">${storageMessage}</p>` : "") + page;
-    document.title = (route.view === "book" ? route.book.name : route.view === "calendar" ? "Ημερολόγιο" : "Σημειώσεις") + " · Planner";
+    document.title = (route.view === "book" ? route.book.name : route.view === "calendar" ? "Ημερολόγιο" : route.view === "food" ? "Τι τρώω" : "Σημειώσεις") + " · Planner";
   }
 
   function formError(id, message = "") {
@@ -383,7 +462,9 @@ async function startPlanner() {
   main.addEventListener("click", event => {
     const button = event.target.closest("button");
     if (!button) return;
-    if (button.hasAttribute("data-new-note")) openEditor();
+    if (button.dataset.foodAdd) openFoodEditor(button.dataset.foodAdd);
+    else if (button.dataset.foodEdit) openFoodEditor("",button.dataset.foodEdit);
+    else if (button.hasAttribute("data-new-note")) openEditor();
     else if (button.dataset.edit) openEditor(button.dataset.edit);
     else if (button.hasAttribute("data-delete-book")) deleteBook();
     else if (button.hasAttribute("data-new-book")) {
@@ -393,6 +474,7 @@ async function startPlanner() {
 
   main.addEventListener("change", async event => {
     const box = event.target;
+    if (box.id==="food-day") { if(validDay(box.value))location.hash="food/"+box.value; return; }
     if (!box.matches("[data-check]")) return;
     const n = notes.find(note => note.id === box.dataset.check);
     const index = Number(box.dataset.index);

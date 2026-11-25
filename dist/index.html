@@ -39,6 +39,7 @@
       <nav class="main-nav" aria-label="Κύρια πλοήγηση">
         <a href="#notes" id="nav-notes" aria-current="page"><svg aria-hidden="true"><use href="./icons.svg#pages"/></svg>Σημειώσεις</a>
         <a href="#calendar" id="nav-calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg>Ημερολόγιο</a>
+        <a href="#food" id="nav-food"><svg aria-hidden="true"><use href="./icons.svg#food"/></svg>Τι τρώω</a>
       </nav>
       <a class="date-shortcut" id="today-shortcut" href="#calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span></span></a>
       <button type="button" id="logout" class="devices-button">Αποσύνδεση</button>
@@ -73,6 +74,18 @@
         <button type="button" class="delete-button" id="delete-note" hidden><svg aria-hidden="true"><use href="./icons.svg#trash"/></svg>Διαγραφή</button>
         <button type="submit" class="primary">Αποθήκευση</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="food-dialog" aria-labelledby="food-heading">
+    <form id="food-form">
+      <div class="sheet-head"><h2 id="food-heading">Νέα καταχώρηση φαγητού</h2><button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button></div>
+      <div class="sheet-body">
+        <label class="field">Τι έφαγες; <input id="food-name" maxlength="300" required autofocus placeholder="π.χ. Τοστ με τυρί"></label>
+        <label class="field">Θερμίδες (προαιρετικά) <input id="food-calories" type="number" min="0" max="100000" step="1" inputmode="numeric" placeholder="kcal"></label>
+        <label class="field">Ημερομηνία <input id="food-date" type="date" min="0001-01-01" max="9999-12-31" required></label>
+        <p class="form-error" id="food-error" role="alert" hidden></p>
+      </div>
+      <div class="sheet-actions"><button type="button" class="delete-button" id="delete-food" hidden><svg aria-hidden="true"><use href="./icons.svg#trash"/></svg>Διαγραφή</button><button type="submit" class="primary">Αποθήκευση</button></div>
     </form>
   </dialog>
   <dialog id="book-dialog" aria-labelledby="book-heading">

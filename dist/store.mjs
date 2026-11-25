@@ -176,7 +176,7 @@ export async function openPlanner(token) {
   async function pages(session, receive) {
     let cursor = "";
     do {
-      const page = await api("planner" + (cursor ? "?after=" + encodeURIComponent(cursor) : ""), {}, session);
+      const page = await api("planner?types=all" + (cursor ? "&after=" + encodeURIComponent(cursor) : ""), {}, session);
       if (!Array.isArray(page.records) || (page.next && page.next <= cursor)) throw new Error("page");
       if (page.records.some(row => !row || !validVersion(row.version) || !validRecord(row.key, row.value))) throw new Error("record");
       await receive(page.records);
@@ -210,6 +210,11 @@ export async function openPlanner(token) {
             entries.put({ key: "note:" + id, version: nextVersion(current.version, writer),
               base: null, dirty: 1, value: { ...value, id, title } });
             conflictMessage = "Η ίδια σημείωση άλλαξε σε δύο συσκευές. Κρατήθηκε και η δική σου αλλαγή ως αντίγραφο.";
+          } else if (row.key.startsWith("food:") && current.value && JSON.stringify(current.value) !== JSON.stringify(row.value)) {
+            const id=crypto.randomUUID(),value=current.value;
+            entries.put({key:"food:"+id,version:nextVersion(current.version,writer),base:null,dirty:1,
+              value:{...value,id,name:value.name.slice(0,285)+" (αντίγραφο)"}});
+            conflictMessage="Η καταχώρηση φαγητού άλλαξε σε δύο συσκευές. Διατηρήθηκε και η δική σου αλλαγή ως αντίγραφο.";
           } else if (!current.value && row.value) {
             conflictMessage = "Η καταχώρηση άλλαξε σε άλλη συσκευή πριν διαγραφεί. Μπορείς να την ελέγξεις ξανά.";
           }
