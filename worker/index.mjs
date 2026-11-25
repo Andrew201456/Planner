@@ -102,7 +102,7 @@ export default {
         await env.DB.prepare("SELECT record_key FROM planner_records LIMIT 0").all();
         return json({ ok: true, storage: "D1" });
       }
-      if (!["/api/planner", "/api/pairing", "/api/pairing/redeem"].includes(url.pathname)) return json({ error: "route" }, 404);
+      if (!["/api/planner", "/api/pairing", "/api/pairing/redeem", "/api/diagnostics"].includes(url.pathname)) return json({ error: "route" }, 404);
       const token = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get("Authorization") || "")?.[1];
       if (!token) return json({ error: "authorization" }, 401);
       const device = await digest(token);
@@ -110,6 +110,16 @@ export default {
       // Existing browsers keep their original namespace. Paired devices use the inviter's namespace.
       const owner = await env.DB.prepare("SELECT planner_id FROM planner_devices WHERE device_id = ?")
         .bind(device).first("planner_id") ?? device;
+      if (url.pathname === "/api/diagnostics") {
+        if (request.method !== "GET") return json({ error: "method" }, 405);
+        const { results } = await env.DB.prepare(`SELECT
+          COUNT(*) AS records,
+          COUNT(CASE WHEN record_key LIKE 'note:%' AND data IS NOT NULL THEN 1 END) AS notes,
+          COUNT(CASE WHEN record_key LIKE 'book:%' AND data IS NOT NULL THEN 1 END) AS books
+          FROM planner_records WHERE planner_id = ?`).bind(owner).all();
+        return json({ ok: true, storage: "D1", records: results[0].records,
+          notes: results[0].notes, books: results[0].books });
+      }
       if (url.pathname !== "/api/planner") {
         if (request.method !== "POST") return json({ error: "method" }, 405);
         if (url.pathname === "/api/pairing") return json(await invite(env.DB, owner));
