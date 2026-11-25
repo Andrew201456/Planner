@@ -88,6 +88,10 @@ test("a one-time, expiring code gives a second device access to the original Pla
   assert.deepEqual(await (await join(oldDevice, pairedDevice)).json(), { samePlanner: false });
   assert.equal((await join(oldDevice, pairedDevice)).status, 200);
   assert.equal((await join(outsider, token())).status, 409);
+  const diagnostics = await (await call(pairedDevice, "diagnostics")).json();
+  assert.deepEqual(diagnostics, { ok: true, storage: "D1", records: 1, notes: 0, books: 1 });
+  assert.deepEqual(await (await call(outsider, "diagnostics")).json(),
+    { ok: true, storage: "D1", records: 0, notes: 0, books: 0 });
   assert.deepEqual((await (await call(pairedDevice, "planner")).json()).records, [entry]);
   const second = { ...entry, key: "book:ideas", value: presets[3] };
   assert.equal((await call(pairedDevice, "planner", "PUT", second)).status, 200);
