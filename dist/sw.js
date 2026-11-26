@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = "planner-shell:" + scope + ":";
-const version = prefix + "14";
+const version = prefix + "15";
 const files = [
   "index.html", "style.css", "app.js", "model.mjs", "store.mjs", "pairing.mjs", "icons.svg", "icon.svg", "manifest.webmanifest",
   "icon-192.png", "icon-512.png"
