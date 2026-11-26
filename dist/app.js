@@ -89,6 +89,8 @@ async function startPlanner() {
   async function write(type, id, record, expected) {
     if (!store) throw new Error(storageMessage || "Η αποθήκευση δεν είναι ακόμη διαθέσιμη.");
     const saved = await store.save(type, id, record, expected);
+    // An older cached store module may not return the committed row yet.
+    if (!saved) { await loadData(); return; }
     // Show the committed record immediately, without reading the whole database.
     // Invalidate any older reload snapshot and reconcile again in the background.
     ++reading;
@@ -407,7 +409,7 @@ async function startPlanner() {
     $("delete-note").hidden = !n;
     formError("note-error");
     noteDialog.showModal();
-    if (!n && noteForm.elements.kind.value === "list") $("note-body").focus();
+    // Let the user open the soft keyboard when ready.
   }
 
   function checklistItems(body, oldItems) {
