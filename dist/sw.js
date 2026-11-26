@@ -11,8 +11,7 @@ const assets = new Set(files);
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(version);
-    await cache.add(new Request(entry,{cache:"reload"}));
-    await Promise.allSettled(files.filter(file=>file!==entry).map(file=>cache.add(new Request(file,{cache:"reload"}))));
+    await cache.addAll(files.map(file=>new Request(file,{cache:"reload"})));
     await self.skipWaiting();
   })());
 });
