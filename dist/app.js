@@ -141,11 +141,11 @@ async function startPlanner() {
   function syncStatus(state) {
     const el = $("sync-status");
     const messages = {
-      ready: "Δεν υπάρχουν εκκρεμείς τοπικές αλλαγές ✓",
-      sending: "Αποθηκεύτηκε στη συσκευή · συγχρονισμός Cloudflare…",
-      saved: "Αποθηκεύτηκε στο Cloudflare ✓",
+      ready: "Όλες οι αλλαγές συγχρονίστηκαν ✓",
+      sending: "Αποθηκεύτηκε στη συσκευή · συγχρονισμός…",
+      saved: "Αποθηκεύτηκε online ✓",
       pending: "Οι αλλαγές είναι στη συσκευή. Θα περάσουν στη βάση μόλις επανέλθει η σύνδεση.",
-      unavailable: "Η βάση είναι προσωρινά εκτός σύνδεσης. Βλέπεις το αντίγραφο της συσκευής."
+      unavailable: "Δεν υπάρχει σύνδεση με τον διακομιστή. Βλέπεις τα δεδομένα της συσκευής."
     };
     clearTimeout(statusTimer);
     el.textContent = messages[state] || "";
@@ -622,7 +622,7 @@ async function startPlanner() {
         if (synced) {
           const time = new Intl.DateTimeFormat("el-GR",{hour:"2-digit",minute:"2-digit"}).format(new Date());
           refreshButton.title = "Τελευταία χειροκίνητη ανανέωση: " + time;
-          say("Το Planner ενημερώθηκε από το Cloudflare ✓");
+          say("Η ανανέωση ολοκληρώθηκε ✓");
         } else {
           say("Η ανανέωση δεν ολοκληρώθηκε. Οι τοπικές αλλαγές παραμένουν στη συσκευή.");
         }
