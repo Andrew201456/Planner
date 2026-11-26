@@ -574,6 +574,31 @@ async function startPlanner() {
   catch { storageMessage = "Ο browser δεν επέτρεψε την αποθήκευση στη συσκευή. Άνοιξε ξανά το Planner για να αποθηκεύσεις αλλαγές."; }
   await reload();
   store?.start(reload, syncStatus, say);
+  const refreshButton = $("soft-refresh");
+  if (refreshButton && typeof store?.refresh === "function") {
+    refreshButton.disabled = false;
+    refreshButton.addEventListener("click", async () => {
+      if (refreshButton.disabled) return;
+      refreshButton.disabled = true;
+      refreshButton.setAttribute("aria-busy","true");
+      try {
+        const synced = await store.refresh();
+        await reload();
+        if (synced) {
+          const time = new Intl.DateTimeFormat("el-GR",{hour:"2-digit",minute:"2-digit"}).format(new Date());
+          refreshButton.title = "Τελευταία χειροκίνητη ανανέωση: " + time;
+          say("Το Planner ενημερώθηκε από το Cloudflare ✓");
+        } else {
+          say("Η ανανέωση δεν ολοκληρώθηκε. Οι τοπικές αλλαγές παραμένουν στη συσκευή.");
+        }
+      } catch {
+        say("Η ανανέωση απέτυχε. Δοκίμασε ξανά.");
+      } finally {
+        refreshButton.removeAttribute("aria-busy");
+        refreshButton.disabled = false;
+      }
+    });
+  }
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
