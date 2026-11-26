@@ -73,10 +73,10 @@
   <header class="app-header">
     <div class="header-inner">
       <a class="brand" href="#notes" aria-label="Planner, αρχική"><img src="./icon.svg" alt="" width="40" height="40"><span>Planner</span></a>
-      <nav class="main-nav" aria-label="Κύρια πλοήγηση">
-        <a href="#notes" id="nav-notes" aria-current="page"><svg aria-hidden="true"><use href="./icons.svg#pages"/></svg>Σημειώσεις</a>
-        <a href="#calendar" id="nav-calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg>Ημερολόγιο</a>
-        <a href="#food" id="nav-food"><svg aria-hidden="true"><use href="./icons.svg#food"/></svg>Τι τρώω</a>
+      <nav class="main-nav glass-nav" id="glass-nav" data-tab="0" aria-label="Κύρια πλοήγηση">
+        <a href="#notes" id="nav-notes" aria-current="page"><svg aria-hidden="true"><use href="./icons.svg#pages"/></svg><span>Σημειώσεις</span></a>
+        <a href="#calendar" id="nav-calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span>Ημερολόγιο</span></a>
+        <a href="#food" id="nav-food"><svg aria-hidden="true"><use href="./icons.svg#food"/></svg><span>Τι τρώω</span></a>
       </nav>
       <a class="date-shortcut" id="today-shortcut" href="#calendar"><svg aria-hidden="true"><use href="./icons.svg#calendar"/></svg><span></span></a>
       <button type="button" class="refresh-button" id="soft-refresh" aria-label="Συγχρονισμός με Cloudflare" title="Ανανέωση από Cloudflare" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8a7 7 0 0 1 11.6-2L20 12M4 12l2.3 6A7 7 0 0 0 17.9 16"/></svg></button>
