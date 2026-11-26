@@ -298,3 +298,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 @media(max-width:450px){.date-shortcut span{display:none}.date-shortcut{min-width:28px;justify-content:center}}
 @media(max-width:330px){.date-shortcut{display:none}.devices-button{margin-left:auto;font-size:.75rem}.brand span{font-size:1.25rem}.brand{gap:6px}.theme-toggle{width:36px;height:36px}}
+
+/* Keep the editor actions reachable when Android's soft keyboard is visible. */
+@media(max-width:730px){
+  dialog[open]{position:fixed;inset:auto 0 var(--planner-keyboard-offset,0px);margin:0;width:100%;max-width:100%;max-height:calc(var(--planner-visible-height,100dvh) - 8px);overflow:hidden;}
+  dialog[open]>form{display:flex;flex-direction:column;max-height:calc(var(--planner-visible-height,100dvh) - 10px);min-height:0;overflow:hidden;}
+  dialog .sheet-head,dialog .sheet-actions{flex:none;}
+  dialog .sheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+  dialog .sheet-actions{background:var(--paper);padding:10px 16px calc(10px + env(safe-area-inset-bottom));}
+  dialog .sheet-actions .primary{min-height:48px;flex:1;}
+  dialog .sheet-head{padding:10px 16px;}
+  dialog .sheet-body{padding:14px 16px;}
+}
+form[aria-busy="true"] .sheet-actions .primary{opacity:.8;cursor:progress;}
