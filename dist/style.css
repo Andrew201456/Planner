@@ -311,3 +311,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   dialog .sheet-body{padding:14px 16px;}
 }
 form[aria-busy="true"] .sheet-actions .primary{opacity:.8;cursor:progress;}
+
+/* Compact cloud refresh next to the theme control. */
+.refresh-button{flex:none;display:inline-grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--rule);border-radius:12px;color:var(--blue);background:var(--surface)}
+.refresh-button svg{width:21px;height:21px}
+.refresh-button:not(:disabled):hover{background:var(--surface-subtle)}
+.refresh-button:active:not(:disabled){transform:scale(.94)}
+.refresh-button[aria-busy="true"]{opacity:1;cursor:progress}
+.refresh-button[aria-busy="true"] svg{animation:planner-refresh-spin .9s linear infinite}
+@keyframes planner-refresh-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.refresh-button[aria-busy="true"] svg{animation:none}.refresh-button[aria-busy="true"]{opacity:.6}}
+@media(max-width:730px){.header-inner{gap:6px;padding-inline:12px}.date-shortcut{display:none}.refresh-button{margin-left:auto}.devices-button{font-size:.77rem;white-space:nowrap;margin-left:0}}
+@media(max-width:350px){.brand span{font-size:1.15rem}.brand img{width:32px;height:32px}.theme-toggle,.refresh-button{width:38px;height:44px}.header-inner{padding-inline:8px;gap:4px}}

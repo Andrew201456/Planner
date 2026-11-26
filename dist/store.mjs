@@ -145,7 +145,7 @@ export async function openPlanner(token) {
   const dirty = () => read(entries => entries.index("dirty").count(1));
   const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(channelName) : null;
   let onChange = () => {}, onStatus = () => {}, onConflict = () => {};
-  let running = null, scheduled = false, timer, backoff = 2000;
+  let running = null, manualRefresh = null, scheduled = false, timer, backoff = 2000;
   let migrationPending = !migrated;
 
   function notify() {
@@ -265,7 +265,7 @@ export async function openPlanner(token) {
       scheduled ||= remaining > 0 || !complete;
       onStatus(remaining ? "sending" : wrote ? "saved" : "ready");
       backoff = 2000;
-      return true;
+      return complete && remaining === 0;
     } catch {
       if (session !== token) return false;
       const pending = await dirty().catch(() => 1);
@@ -297,6 +297,16 @@ export async function openPlanner(token) {
 
   return {
     all: () => read(entries => entries.getAll()),
+    refresh() {
+      // Coalesce manual clicks, then start a fresh upload + pull cycle. A
+      // previously running pull may have already passed a changed record.
+      if (manualRefresh) return manualRefresh;
+      manualRefresh = (async () => {
+        if (running) await running;
+        return await sync();
+      })().finally(() => { manualRefresh = null; });
+      return manualRefresh;
+    },
     async diagnostics() {
       if (!await sync() || await dirty()) {
         throw new Error("Υπάρχουν αλλαγές που δεν έχουν περάσει ακόμη στη βάση. Δοκίμασε ξανά με σύνδεση.");
