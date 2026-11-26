@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = "planner-shell:" + scope + ":";
-const version = prefix + "10";
+const version = prefix + "11";
 const files = [
   "index.html", "style.css", "app.js", "model.mjs", "store.mjs", "pairing.mjs", "icons.svg", "icon.svg", "manifest.webmanifest",
   "icon-192.png", "icon-512.png"
@@ -11,7 +11,8 @@ const assets = new Set(files);
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(version);
-    await cache.addAll(files);
+    await cache.add(new Request(entry,{cache:"reload"}));
+    await Promise.allSettled(files.filter(file=>file!==entry).map(file=>cache.add(new Request(file,{cache:"reload"}))));
     await self.skipWaiting();
   })());
 });
@@ -36,7 +37,7 @@ self.addEventListener("fetch", event => {
     const cache = await caches.open(version);
     const key = isHome ? entry : url.href;
     try {
-      const response = await fetch(req);
+      const response = await fetch(req,{cache:"no-cache"});
       if (response.ok && !response.redirected) {
         try { await cache.put(key, response.clone()); } catch { /* Storage can be full. */ }
       }
