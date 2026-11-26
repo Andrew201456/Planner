@@ -35,8 +35,8 @@ async function authRequest(path, options = {}, token) {
     if (!response.ok) {
       const error = new Error(response.status===401 ? "Λάθος username ή password." :
         response.status===429 ? "Πολλές προσπάθειες. Δοκίμασε ξανά σε 10 λεπτά." :
-        data.error==="password_not_configured" ? "Δεν έχει ρυθμιστεί το PASSWORD στο Cloudflare." :
-        "Η σύνδεση με το Cloudflare δεν είναι διαθέσιμη.");
+        data.error==="password_not_configured" ? "Η σύνδεση δεν έχει ρυθμιστεί ακόμη." :
+        "Η σύνδεση με τον διακομιστή δεν είναι διαθέσιμη.");
       error.status = response.status; throw error;
     }
     return data;
