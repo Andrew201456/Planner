@@ -323,3 +323,29 @@ form[aria-busy="true"] .sheet-actions .primary{opacity:.8;cursor:progress;}
 @media(prefers-reduced-motion:reduce){.refresh-button[aria-busy="true"] svg{animation:none}.refresh-button[aria-busy="true"]{opacity:.6}}
 @media(max-width:730px){.header-inner{gap:6px;padding-inline:12px}.date-shortcut{display:none}.refresh-button{margin-left:auto}.devices-button{font-size:.77rem;white-space:nowrap;margin-left:0}}
 @media(max-width:350px){.brand span{font-size:1.15rem}.brand img{width:32px;height:32px}.theme-toggle,.refresh-button{width:38px;height:44px}.header-inner{padding-inline:8px;gap:4px}}
+
+/* Compact safe-area-aware header for iPhone, including landscape. */
+.app-header .devices-button svg{display:none}
+@media (max-width:730px){
+ .app-header .header-inner{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,44px);align-items:center;gap:8px;min-height:calc(64px + env(safe-area-inset-top,0px));padding:calc(8px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px));}
+ .app-header .brand{min-width:0;gap:7px;white-space:nowrap;grid-column:1;grid-row:1}
+ .app-header .brand img{width:32px;height:32px;flex:none}
+ .app-header .brand span{min-width:0;font-size:clamp(1.05rem,5vw,1.45rem);overflow:hidden;text-overflow:ellipsis}
+ .app-header .refresh-button,.app-header .theme-toggle,.app-header .devices-button{display:grid;place-items:center;flex:none;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;margin:0;border:1px solid var(--rule);border-radius:12px;background:var(--surface);color:var(--blue)}
+ .app-header .refresh-button{grid-column:2;grid-row:1}
+ .app-header .theme-toggle{grid-column:3;grid-row:1}
+ .app-header .devices-button{grid-column:4;grid-row:1}
+ .app-header .devices-button svg{display:block;width:21px;height:21px}
+ .app-header .devices-button span{display:none}
+ .app-header .date-shortcut{display:none}
+}
+@media (min-width:731px) and (max-width:1050px){
+ .app-header .header-inner{display:grid;grid-template-columns:minmax(0,1fr) 44px 44px auto;gap:4px 10px;padding:calc(8px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px))}
+ .app-header .brand{grid-column:1;grid-row:1;min-width:0}
+ .app-header .refresh-button{grid-column:2;grid-row:1;margin:0}
+ .app-header .theme-toggle{grid-column:3;grid-row:1;width:44px;height:44px}
+ .app-header .devices-button{grid-column:4;grid-row:1;white-space:nowrap}
+ .app-header .date-shortcut{display:none}
+ .app-header .main-nav{grid-column:1/-1;grid-row:2;margin:0;justify-content:center;min-height:44px}
+ .app-header .main-nav a{min-width:0;padding:6px 12px}
+}
