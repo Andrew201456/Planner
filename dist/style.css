@@ -349,3 +349,14 @@ form[aria-busy="true"] .sheet-actions .primary{opacity:.8;cursor:progress;}
  .app-header .main-nav{grid-column:1/-1;grid-row:2;margin:0;justify-content:center;min-height:44px}
  .app-header .main-nav a{min-width:0;padding:6px 12px}
 }
+
+/* Give the phone status bar/notch a little more breathing room. */
+@media (max-width:730px){
+ .app-header .header-inner{padding-top:calc(22px + env(safe-area-inset-top,0px));min-height:calc(78px + env(safe-area-inset-top,0px))}
+}
+@media (max-width:730px) and (display-mode:standalone){
+ .app-header .header-inner{padding-top:calc(14px + max(20px,env(safe-area-inset-top,0px)));min-height:calc(66px + max(20px,env(safe-area-inset-top,0px)))}
+}
+@media (min-width:731px) and (max-width:1050px) and (orientation:landscape) and (pointer:coarse){
+ .app-header .header-inner{padding-top:calc(16px + env(safe-area-inset-top,0px))}
+}
