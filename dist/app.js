@@ -149,6 +149,7 @@ async function startPlanner() {
     };
     clearTimeout(statusTimer);
     el.textContent = messages[state] || "";
+    el.dataset.state = state;
     el.hidden = !el.textContent;
     // Keep the last confirmed cloud status visible.
   }
@@ -338,6 +339,38 @@ async function startPlanner() {
     finally{saving(foodForm,false);}
   });
 
+  let renderedView = "", renderedTab = -1;
+  let pageMotion, tabMotion;
+  const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  function animateNavigation(viewKey, tabIndex) {
+    const nav = $("glass-nav") || document.querySelector(".main-nav");
+    const previousTab = renderedTab;
+    if (nav) nav.dataset.tab = String(tabIndex);
+    if (renderedView !== viewKey) {
+      pageMotion?.cancel();
+      if (!reducedMotion() && typeof main.animate === "function") {
+        const direction = previousTab < 0 || previousTab === tabIndex ? 0 : Math.sign(tabIndex-previousTab);
+        pageMotion = main.animate([
+          { opacity: .25, transform: "translate3d("+(direction*9)+"px,7px,0)" },
+          { opacity: 1, transform: "translate3d(0,0,0)" }
+        ],{ duration: 230, easing: "cubic-bezier(.2,.7,.25,1)" });
+      }
+      renderedView = viewKey;
+    }
+    if (previousTab >= 0 && previousTab !== tabIndex) {
+      tabMotion?.cancel();
+      const svg = nav?.querySelector('[aria-current="page"] svg');
+      if (!reducedMotion() && typeof svg?.animate === "function") {
+        tabMotion = svg.animate([
+          { transform: "scale(.86) translateY(1px)" },
+          { transform: "scale(1.16) translateY(-2px)", offset:.55 },
+          { transform: "scale(1) translateY(0)" }
+        ],{duration:360,easing:"cubic-bezier(.2,.7,.25,1)"});
+      }
+    }
+    renderedTab = tabIndex;
+  }
+
   function render() {
     route = readRoute();
     const today = localKey(new Date());
@@ -377,6 +410,8 @@ async function startPlanner() {
     }
     main.innerHTML = (storageMessage ? `<p class="storage-error" role="alert">${storageMessage}</p>` : "") + page;
     document.title = (route.view === "book" ? route.book.name : route.view === "calendar" ? "Ημερολόγιο" : route.view === "food" ? "Τι τρώω" : "Σημειώσεις") + " · Planner";
+    const viewKey = route.view === "book" ? "book:"+route.book.id : route.view;
+    animateNavigation(viewKey, route.view === "calendar" ? 1 : route.view === "food" ? 2 : 0);
   }
 
   function formError(id, message = "") {
