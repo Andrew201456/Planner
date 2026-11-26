@@ -489,7 +489,7 @@ dialog::backdrop{animation:planner-backdrop-in .2s ease both}
  .main-nav.glass-nav a:focus-visible{outline-offset:-3px}
 }
 
-/* Ambient light: two soft gradients on one non-interactive compositor layer. */
+/* Ambient light: soft gradients on a clipped, non-interactive layer. */
 :root{
  --ambient-blue:rgba(116,166,247,.22);
  --ambient-violet:rgba(168,139,220,.16);
@@ -501,8 +501,9 @@ dialog::backdrop{animation:planner-backdrop-in .2s ease both}
  --ambient-mint:rgba(43,142,137,.12);
 }
 body{isolation:isolate;background:var(--paper)}
-body::before{
- content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+.ambient-background{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.ambient-background::before{
+ content:"";position:absolute;inset:0;pointer-events:none;
  background:radial-gradient(ellipse at 82% 17%,var(--ambient-blue),transparent 54%),radial-gradient(ellipse at 13% 64%,var(--ambient-violet),transparent 52%),radial-gradient(ellipse at 85% 88%,var(--ambient-mint),transparent 47%);
  transform:scale(1.12);transform-origin:center;
  animation:planner-ambient-drift 28s ease-in-out infinite alternate;
@@ -512,4 +513,4 @@ body::before{
  55%{transform:translate3d(2%,1%,0) scale(1.19);opacity:1}
  100%{transform:translate3d(-1%,2%,0) scale(1.14);opacity:.82}
 }
-@media(prefers-reduced-motion:reduce){body::before{animation:none;transform:none;opacity:.85}}
+@media(prefers-reduced-motion:reduce){.ambient-background::before{animation:none;transform:none;opacity:.85}}
