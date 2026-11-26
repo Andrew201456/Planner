@@ -2,7 +2,7 @@
 <html lang="el">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
   <meta name="theme-color" content="#faf9f5">
   <meta name="description" content="Το προσωπικό σου σημειωματάριο με χρωματιστά τετράδια, λίστες και ημερολόγιο.">
   <title>Planner</title>
@@ -100,7 +100,7 @@
           <label><input type="radio" name="kind" value="text" checked><span><svg aria-hidden="true"><use href="./icons.svg#text"/></svg>Κείμενο</span></label>
           <label><input type="radio" name="kind" value="list"><span><svg aria-hidden="true"><use href="./icons.svg#list"/></svg>Λίστα</span></label>
         </fieldset>
-        <label class="field">Τίτλος <input id="note-title" type="text" maxlength="160" placeholder="Τίτλος (προαιρετικά)" autofocus></label>
+        <label class="field">Τίτλος <input id="note-title" type="text" maxlength="160" placeholder="Τίτλος (προαιρετικά)"></label>
         <label class="field"><span id="body-label">Σημείωση</span><textarea id="note-body" rows="5" maxlength="20000" placeholder="Γράψε εδώ…"></textarea></label>
         <div class="meta-fields">
           <label class="field">Τετράδιο <select id="note-book"></select></label>
@@ -118,7 +118,7 @@
     <form id="food-form">
       <div class="sheet-head"><h2 id="food-heading">Νέα καταχώρηση φαγητού</h2><button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button></div>
       <div class="sheet-body">
-        <label class="field">Τι έφαγες; <input id="food-name" maxlength="300" required autofocus placeholder="π.χ. Τοστ με τυρί"></label>
+        <label class="field">Τι έφαγες; <input id="food-name" maxlength="300" required placeholder="π.χ. Τοστ με τυρί"></label>
         <label class="field">Θερμίδες (προαιρετικά) <input id="food-calories" type="number" min="0" max="100000" step="1" inputmode="numeric" placeholder="kcal"></label>
         <label class="field">Ημερομηνία <input id="food-date" type="date" min="0001-01-01" max="9999-12-31" required></label>
         <p class="form-error" id="food-error" role="alert" hidden></p>
@@ -133,7 +133,7 @@
         <button class="icon-button" type="button" data-close aria-label="Κλείσιμο"><svg aria-hidden="true"><use href="./icons.svg#close"/></svg></button>
       </div>
       <div class="sheet-body">
-        <label class="field">Όνομα <input type="text" id="book-name" maxlength="45" placeholder="π.χ. Εκδρομές" required autofocus></label>
+        <label class="field">Όνομα <input type="text" id="book-name" maxlength="45" placeholder="π.χ. Εκδρομές" required></label>
         <fieldset class="colors"><legend>Χρώμα εξωφύλλου</legend><div id="color-options"></div></fieldset>
         <p class="form-error" id="book-error" role="alert" hidden></p>
       </div>

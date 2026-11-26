@@ -66,10 +66,14 @@ function result(request) {
 
 async function transact(db, names, mode, work) {
   const tx = db.transaction(names, mode);
+  let timedOut = false;
   const done = new Promise((resolve, reject) => {
     tx.oncomplete = resolve;
-    tx.onabort = () => reject(tx.error || new Error("Η αλλαγή δεν αποθηκεύτηκε στη συσκευή."));
+    tx.onabort = () => reject(timedOut ? new Error("Η αποθήκευση στη συσκευή καθυστερεί. Δοκίμασε ξανά χωρίς να κλείσεις τη φόρμα.") : tx.error || new Error("Η αλλαγή δεν αποθηκεύτηκε στη συσκευή."));
   });
+  // Prevent a stuck transaction from leaving an Android form locked forever.
+  const deadline = setTimeout(() => { try { timedOut = true; tx.abort(); } catch {} }, 10000);
+  done.catch(() => {});
   try {
     const value = await work(tx);
     await done;
@@ -77,8 +81,9 @@ async function transact(db, names, mode, work) {
   } catch (error) {
     try { tx.abort(); } catch { /* Already closed. */ }
     await done.catch(() => {});
+    if (timedOut) throw new Error("Η αποθήκευση στη συσκευή καθυστερεί. Δοκίμασε ξανά.");
     throw error;
-  }
+  } finally { clearTimeout(deadline); }
 }
 
 function nextVersion(previous = seedVersion, writer = crypto.randomUUID()) {
@@ -136,6 +141,7 @@ export async function openPlanner(token) {
   const scoped = (mode, fn, session) => transact(db, ["settings", "entries"], mode, tx =>
     fn(tx.objectStore("entries"), tx.objectStore("settings")));
   const edit = (fn, session = token) => scoped("readwrite", fn, session);
+  const editEntries = fn => transact(db, "entries", "readwrite", tx => fn(tx.objectStore("entries")));
   const dirty = () => read(entries => entries.index("dirty").count(1));
   const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(channelName) : null;
   let onChange = () => {}, onStatus = () => {}, onConflict = () => {};
@@ -180,13 +186,15 @@ export async function openPlanner(token) {
       if (!Array.isArray(page.records) || (page.next && page.next <= cursor)) throw new Error("page");
       if (page.records.some(row => !row || !validVersion(row.version) || !validRecord(row.key, row.value))) throw new Error("record");
       await receive(page.records);
+      if (await dirty()) return false;
       cursor = page.next;
     } while (cursor);
+    return true;
   }
 
   async function applyRemote(records, session, sent) {
     let conflictMessage = "";
-    const changed = await edit(async entries => {
+    const changed = await editEntries(async entries => {
       let changed = false;
       for (const row of records) {
         if (!row || !validVersion(row.version) || !validRecord(row.key, row.value)) throw new Error("record");
@@ -224,7 +232,7 @@ export async function openPlanner(token) {
         entries.put({ key: row.key, version: row.version, value: row.value, dirty: 0 });
       }
       return changed;
-    }, session);
+    });
     if (conflictMessage) onConflict(conflictMessage);
     return changed;
   }
@@ -235,7 +243,7 @@ export async function openPlanner(token) {
       if (!navigator.onLine) throw new Error("offline");
       await migrate(session);
       for (;;) {
-        const pending = await scoped("readonly", entries => result(entries.index("dirty").getAll(1, 8)), session);
+        const pending = await read(entries => entries.index("dirty").getAll(1, 8));
         if (!pending.length) break;
         onStatus("sending");
         for (const { key, value, version, base, importOnly } of pending) {
@@ -246,11 +254,15 @@ export async function openPlanner(token) {
           wrote = true;
         }
       }
-      await pages(session, async records => {
+      // Acknowledge local uploads before fetching the rest of the account.
+      // Large paginated histories on mobile must not keep the save indicator busy.
+      const afterPush = await dirty();
+      if (!afterPush) onStatus(wrote ? "saved" : "ready");
+      const complete = !afterPush && await pages(session, async records => {
         if (await applyRemote(records, session)) { notify(); await onChange(); }
       });
       const remaining = await dirty();
-      scheduled ||= remaining > 0;
+      scheduled ||= remaining > 0 || !complete;
       onStatus(remaining ? "sending" : wrote ? "saved" : "ready");
       backoff = 2000;
       return true;
@@ -268,7 +280,7 @@ export async function openPlanner(token) {
 
   function sync() {
     if (running) return running;
-    clearTimeout(timer);
+    clearTimeout(timer); timer = null;
     scheduled = false;
     running = transfer(token).finally(() => {
       running = null;
@@ -299,7 +311,7 @@ export async function openPlanner(token) {
     async save(type, id, value, expected) {
       const key = type + ":" + id;
       if (!validRecord(key, value)) throw new Error("Έλεγξε τα στοιχεία της καταχώρησης.");
-      await edit(async entries => {
+      const saved = await editEntries(async entries => {
         const current = await result(entries.get(key));
         if ((current?.version ?? null) !== expected) {
           throw new Error("Η καταχώρηση άλλαξε σε άλλη συσκευή ή καρτέλα. Άνοιξέ την ξανά για να δεις την πιο πρόσφατη έκδοση.");
@@ -308,13 +320,17 @@ export async function openPlanner(token) {
         const record = { key, value, version: nextVersion(current?.version, writer), dirty: 1 };
         if (base !== undefined) record.base = base;
         entries.put(record);
+        return record;
       }).catch(error => {
         if (error.name === "QuotaExceededError") throw new Error("Η αποθήκευση απέτυχε. Έλεγξε τον χώρο της συσκευής.");
         throw error;
       });
-      notify();
+      // The transaction has committed locally. A network response is not
+      // required to return success to the editor.
+      try { notify(); } catch {}
       onStatus(navigator.onLine ? "sending" : "pending");
       kick();
+      return saved;
     },
     start(change, status, conflict = () => {}) {
       onChange = change;
@@ -335,7 +351,7 @@ export async function openPlanner(token) {
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) otherTab();
       });
-      window.setInterval(() => { if (navigator.onLine && !document.hidden && !running) kick(); }, 5000);
+      window.setInterval(() => { if (navigator.onLine && !document.hidden && !running && !timer) kick(); }, 10000);
       kick();
     }
   };

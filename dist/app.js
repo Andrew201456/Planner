@@ -85,17 +85,64 @@ async function startPlanner() {
 
   async function reload() { await loadData(); render(); }
 
+  let localRefreshTimer;
   async function write(type, id, record, expected) {
-    if (!store) throw new Error(storageMessage);
-    await store.save(type, id, record, expected);
-    await loadData();
+    if (!store) throw new Error(storageMessage || "Η αποθήκευση δεν είναι ακόμη διαθέσιμη.");
+    const saved = await store.save(type, id, record, expected);
+    // An older cached store module may not return the committed row yet.
+    if (!saved) { await loadData(); return; }
+    // Show the committed record immediately, without reading the whole database.
+    // Invalidate any older reload snapshot and reconcile again in the background.
+    ++reading;
+    const key = type + ":" + id;
+    if (saved.value) versions.set(key, saved.version);
+    else versions.delete(key);
+    if (type === "book") {
+      books = books.filter(b => b.id !== id);
+      if (saved.value) books.push({...saved.value,icon:presetIcons.get(id)||"pages"});
+      books.sort((a,b)=>(presetOrder.get(a.id)??4)-(presetOrder.get(b.id)??4)||a.created-b.created||a.name.localeCompare(b.name,"el"));
+    } else if (type === "food") {
+      foods = foods.filter(f=>f.id!==id);
+      if(saved.value)foods.push(saved.value);
+      foods.sort((a,b)=>a.created-b.created||a.id.localeCompare(b.id));
+    } else {
+      notes = notes.filter(n=>n.id!==id);
+      if(saved.value)notes.push(saved.value);
+      notes.sort((a,b)=>b.updated-a.updated||a.id.localeCompare(b.id));
+    }
+    clearTimeout(localRefreshTimer);
+    localRefreshTimer=setTimeout(()=>reload().catch(()=>{}),150);
+  }
+
+  function saving(form, active) {
+    if(active) {
+      form.dataset.saving="1";
+      form.setAttribute("aria-busy","true");
+    } else {
+      delete form.dataset.saving;
+      form.removeAttribute("aria-busy");
+    }
+    for(const button of form.querySelectorAll('button[type="submit"],[data-close],.delete-button')){
+      if(active){
+        button.dataset.wasDisabled=button.disabled?"1":"0";
+        button.disabled=true;
+        if(button.type==="submit"){
+          button.dataset.idleLabel=button.textContent;
+          button.textContent="Αποθήκευση…";
+        }
+      } else {
+        button.disabled=button.dataset.wasDisabled==="1";
+        delete button.dataset.wasDisabled;
+        if(button.dataset.idleLabel!==undefined){button.textContent=button.dataset.idleLabel;delete button.dataset.idleLabel;}
+      }
+    }
   }
 
   function syncStatus(state) {
     const el = $("sync-status");
     const messages = {
-      ready: "Συγχρονισμένο με Cloudflare ✓",
-      sending: "Αποθήκευση στο Cloudflare…",
+      ready: "Δεν υπάρχουν εκκρεμείς τοπικές αλλαγές ✓",
+      sending: "Αποθηκεύτηκε στη συσκευή · συγχρονισμός Cloudflare…",
       saved: "Αποθηκεύτηκε στο Cloudflare ✓",
       pending: "Οι αλλαγές είναι στη συσκευή. Θα περάσουν στη βάση μόλις επανέλθει η σύνδεση.",
       unavailable: "Η βάση είναι προσωρινά εκτός σύνδεσης. Βλέπεις το αντίγραφο της συσκευής."
@@ -273,22 +320,22 @@ async function startPlanner() {
     if(!name||!validDay(day)||calories!==null&&(!Number.isSafeInteger(calories)||calories<0||calories>100000)){
       formError("food-error","Συμπλήρωσε φαγητό και έγκυρη ημερομηνία. Οι θερμίδες είναι προαιρετικές.");return;
     }
-    foodForm.dataset.saving="1";
+    formError("food-error"); saving(foodForm,true);
     try{
       const id=foodEditing?.id??makeId(),now=Date.now();
       await write("food",id,{id,name,date:day,calories,created:foodEditing?.created??now,updated:now},foodEditing?.version??null);
       foodDialog.close();
       location.hash=(route.view==="calendar"?"calendar/":"food/")+day;
-      render();say("Το φαγητό καταχωρήθηκε.");
+      render();say("Το φαγητό αποθηκεύτηκε στη συσκευή ✓");
     }catch(error){formError("food-error",error.message);}
-    finally{delete foodForm.dataset.saving;}
+    finally{saving(foodForm,false);}
   });
   $("delete-food")?.addEventListener("click",async()=>{
     if(!foodEditing||foodForm.dataset.saving||!window.confirm("Να διαγραφεί αυτή η καταχώρηση φαγητού;"))return;
-    foodForm.dataset.saving="1";
+    formError("food-error"); saving(foodForm,true);
     try{await write("food",foodEditing.id,null,foodEditing.version);foodDialog.close();render();say("Η καταχώρηση διαγράφηκε.");}
     catch(error){formError("food-error",error.message);}
-    finally{delete foodForm.dataset.saving;}
+    finally{saving(foodForm,false);}
   });
 
   function render() {
@@ -362,7 +409,7 @@ async function startPlanner() {
     $("delete-note").hidden = !n;
     formError("note-error");
     noteDialog.showModal();
-    if (!n && noteForm.elements.kind.value === "list") $("note-body").focus();
+    // Let the user open the soft keyboard when ready.
   }
 
   function checklistItems(body, oldItems) {
@@ -390,7 +437,7 @@ async function startPlanner() {
       formError("note-error", "Διάλεξε μια έγκυρη ημερομηνία."); return;
     }
     if (noteForm.dataset.saving) return;
-    noteForm.dataset.saving = "1";
+    formError("note-error"); saving(noteForm,true);
     try {
       const id = editing?.note.id ?? makeId();
       const next = {
@@ -399,16 +446,18 @@ async function startPlanner() {
       };
       await write("note", id, next, editing?.original ?? null);
     } catch (error) { formError("note-error", error.message); return; }
-    finally { delete noteForm.dataset.saving; }
+    finally { saving(noteForm,false); }
     noteDialog.close();
     render();
-    say("Η σημείωση καταχωρήθηκε.");
+    say("Η σημείωση αποθηκεύτηκε στη συσκευή ✓");
   });
 
   $("delete-note").addEventListener("click", async () => {
-    if (!editing || !window.confirm("Να διαγραφεί η σημείωση «" + titleOf(editing.note) + "»;")) return;
+    if (!editing || noteForm.dataset.saving || !window.confirm("Να διαγραφεί η σημείωση «" + titleOf(editing.note) + "»;")) return;
+    saving(noteForm,true);
     try { await write("note", editing.note.id, null, editing.original); }
     catch (error) { formError("note-error", error.message); return; }
+    finally { saving(noteForm,false); }
     noteDialog.close();
     render();
     say("Η σημείωση διαγράφηκε.");
@@ -433,15 +482,15 @@ async function startPlanner() {
       formError("book-error", name ? "Υπάρχει ήδη τετράδιο με αυτό το όνομα." : "Δώσε όνομα στο τετράδιο."); return;
     }
     if (bookForm.dataset.saving) return;
-    bookForm.dataset.saving = "1";
+    formError("book-error"); saving(bookForm,true);
     try {
       const id = makeId();
       await write("book", id, { id, name, color: bookForm.elements.color.value, created: Date.now() }, null);
       bookDialog.close();
       location.hash = "book/" + id;
-      say("Το τετράδιο δημιουργήθηκε.");
+      say("Το τετράδιο δημιουργήθηκε στη συσκευή ✓");
     } catch (error) { formError("book-error", error.message); }
-    finally { delete bookForm.dataset.saving; }
+    finally { saving(bookForm,false); }
   });
 
   async function deleteBook() {
@@ -486,7 +535,28 @@ async function startPlanner() {
     main.querySelector(`[data-check="${n.id}"][data-index="${index}"]`)?.focus({ preventScroll: true });
   });
 
-  document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
+  document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => {
+    const dialog=button.closest("dialog");
+    if(!dialog.querySelector("form")?.dataset.saving)dialog.close();
+  }));
+  for (const dialog of [noteDialog,foodDialog,bookDialog]) {
+    dialog?.addEventListener("cancel",event=>{
+      if(dialog.querySelector("form")?.dataset.saving)event.preventDefault();
+    });
+  }
+  // Android Chrome may resize only the visual viewport when the IME is open.
+  // Keep the footer within the visible area rather than behind the keyboard.
+  const viewport=window.visualViewport;
+  function fitViewport(){
+    const height=viewport?.height||window.innerHeight;
+    const offset=Math.max(0,window.innerHeight-height-(viewport?.offsetTop||0));
+    document.documentElement.style.setProperty("--planner-visible-height",Math.round(height)+"px");
+    document.documentElement.style.setProperty("--planner-keyboard-offset",Math.round(offset)+"px");
+  }
+  viewport?.addEventListener("resize",fitViewport);
+  viewport?.addEventListener("scroll",fitViewport);
+  window.addEventListener("resize",fitViewport);
+  fitViewport();
   document.querySelector(".skip").addEventListener("click", event => {
     event.preventDefault();
     main.focus();
