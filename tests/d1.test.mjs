@@ -11,7 +11,7 @@ function database() {
     const statement = () => sqlite.prepare(sql);
     return {
       bind: (...args) => prepare(sql, args),
-      run: async () => statement().run(...params),
+      run: async () => {const result=statement().run(...params);return {meta:{changes:Number(result.changes)}};},
       all: () => ({ results: statement().all(...params) }),
       first: async column => {const row=statement().get(...params);return column===undefined?row??null:row?.[column]??null}
     };
