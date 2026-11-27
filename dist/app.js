@@ -206,17 +206,21 @@ async function startPlanner() {
 
   function noteCard(n) {
     const book = bookFor(n.bookId);
+    const isList = n.kind === "list";
     const stamp = n.date ? `<span class="stamp">${icon("calendar")}${shortFmt.format(parseDay(n.date))}</span>` : "";
     const preview = n.title ? n.text : n.text.split("\n").slice(1).join("\n").trim();
     let content = preview ? `<p class="excerpt">${html(preview)}</p>` : "";
-    if (n.kind === "list") {
-      content = `<ul class="checklist">${n.items.map((item, i) =>
+    if (isList) {
+      const total = n.items.length, done = n.items.filter(item => item.done).length;
+      const percent = total ? Math.round(done / total * 100) : 0;
+      const progress = total ? `<div class="note-progress${done === total ? " complete" : ""}"><div class="note-progress-label"><span>${done === total ? "Ολοκληρώθηκε" : "Πρόοδος λίστας"}</span><strong>${done}/${total}</strong></div><progress max="100" value="${percent}" aria-label="Ολοκληρωμένα στοιχεία: ${done} από ${total}"></progress></div>` : "";
+      content = progress + `<ul class="checklist">${n.items.map((item, i) =>
         `<li><label><input type="checkbox" data-check="${n.id}" data-index="${i}" ${item.done ? "checked" : ""}><span>${html(item.label)}</span></label></li>`
       ).join("")}</ul>`;
     }
-    return `<article class="note color-${book.color}">
-      <div class="note-head"><span class="book-tag">${html(book.name)}</span>${stamp}</div>
-      <h3><button type="button" class="open-note" data-edit="${n.id}" aria-label="Επεξεργασία: ${html(titleOf(n))}"><span>${html(titleOf(n))}</span>${icon("pencil")}</button></h3>${content}</article>`;
+    return `<article class="note color-${book.color} ${isList ? "note-list-card" : "note-text-card"}" data-note-card="${n.id}">
+      <div class="note-head"><span class="book-tag">${html(book.name)}</span><div class="note-meta"><span class="note-kind">${icon(isList ? "list" : "text")}${isList ? "Λίστα" : "Κείμενο"}</span>${stamp}</div></div>
+      <h3><button type="button" class="open-note" data-edit="${n.id}" aria-label="Επεξεργασία: ${html(titleOf(n))}"><span>${html(titleOf(n))}</span><span class="note-edit-icon">${icon("pencil")}</span></button></h3>${content}</article>`;
   }
 
   function noteList(list, emptyMessage) {
@@ -567,6 +571,10 @@ async function startPlanner() {
     try { await write("note", n.id, { ...n, items, updated: Date.now() }, versions.get("note:" + n.id)); }
     catch (error) { say(error.message); await loadData(); }
     render();
+    if (!reducedMotion()) {
+      const card = main.querySelector(`[data-note-card="${n.id}"]`);
+      card?.querySelector(".note-progress")?.animate?.([{opacity:.65,transform:"translateY(2px)"},{opacity:1,transform:"translateY(0)"}],{duration:240,easing:"ease-out"});
+    }
     main.querySelector(`[data-check="${n.id}"][data-index="${index}"]`)?.focus({ preventScroll: true });
   });
 
