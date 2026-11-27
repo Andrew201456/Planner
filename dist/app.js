@@ -138,21 +138,37 @@ async function startPlanner() {
     }
   }
 
+  let syncFailed = false;
   function syncStatus(state) {
     const el = $("sync-status");
-    const messages = {
-      ready: "Όλες οι αλλαγές συγχρονίστηκαν ✓",
-      sending: "Αποθηκεύτηκε στη συσκευή · συγχρονισμός…",
-      saved: "Αποθηκεύτηκε online ✓",
-      pending: "Οι αλλαγές είναι στη συσκευή. Θα περάσουν στη βάση μόλις επανέλθει η σύνδεση.",
-      unavailable: "Δεν υπάρχει σύνδεση με τον διακομιστή. Βλέπεις τα δεδομένα της συσκευής."
-    };
+    if (state === "sending") return; // A retry is not proof of reconnection.
+    if (state === "pending" || state === "unavailable") {
+      clearTimeout(statusTimer);
+      syncFailed = true;
+      el.dataset.state = "unavailable";
+      el.textContent = "Χάθηκε η σύνδεση";
+      el.classList.remove("sync-leaving");
+      el.hidden = false;
+      return;
+    }
+    if (state !== "ready" && state !== "saved") return;
+    if (navigator.onLine === false) return syncStatus("unavailable");
     clearTimeout(statusTimer);
-    el.textContent = messages[state] || "";
-    el.dataset.state = state;
-    el.hidden = !el.textContent;
-    // Keep the last confirmed cloud status visible.
+    syncFailed = false;
+    el.dataset.state = "ready";
+    el.textContent = "Όλες οι αλλαγές συγχρονίστηκαν ✓";
+    el.classList.remove("sync-leaving");
+    el.hidden = false;
+    statusTimer = setTimeout(() => {
+      if (syncFailed) return;
+      el.classList.add("sync-leaving");
+      statusTimer = setTimeout(() => {
+        if (!syncFailed) el.hidden = true;
+      }, 320);
+    }, 1700);
   }
+  window.addEventListener("offline", () => syncStatus("unavailable"));
+  if (navigator.onLine === false) syncStatus("unavailable");
 
   function say(message) {
     const el = $("toast");
@@ -197,11 +213,9 @@ async function startPlanner() {
     const lists = dated.filter(n=>n.kind==="list");
     const tasks = lists.reduce((sum,n)=>sum+n.items.length,0);
     const done = lists.reduce((sum,n)=>sum+n.items.filter(item=>item.done).length,0);
-    const count = dated.length;
     return `<section class="daily-overview" aria-label="Η ημέρα μου">
       <div class="daily-heading"><div><p class="daily-kicker">Η ΗΜΕΡΑ ΜΟΥ</p><h2>${html(dayFmt.format(parseDay(today)))}</h2></div><a class="daily-calendar" href="#calendar/${today}" aria-label="Άνοιγμα σημερινού ημερολογίου">${icon("calendar")}${icon("arrow")}</a></div>
       <div class="daily-grid">
-        <a class="daily-stat daily-notes" href="#calendar/${today}"><span class="daily-stat-icon">${icon("pages")}</span><strong>${count}</strong><span>Σημειώσεις σήμερα</span></a>
         <a class="daily-stat daily-tasks" href="#calendar/${today}"><span class="daily-stat-icon">${icon("check")}</span><strong>${done}<small> / ${tasks}</small></strong><span>Εργασίες ημέρας</span></a>
         <a class="daily-stat daily-food" href="#food/${today}"><span class="daily-stat-icon">${icon("food")}</span><strong>${known.length?kcal.toLocaleString("el-GR"):"—"}<small> kcal</small></strong><span>${meals.length} καταχωρήσεις</span></a>
       </div>
@@ -655,12 +669,12 @@ async function startPlanner() {
         if (synced) {
           const time = new Intl.DateTimeFormat("el-GR",{hour:"2-digit",minute:"2-digit"}).format(new Date());
           refreshButton.title = "Τελευταία χειροκίνητη ανανέωση: " + time;
-          say("Η ανανέωση ολοκληρώθηκε ✓");
+          // The sync status already confirms the completed refresh.
         } else {
-          say("Η ανανέωση δεν ολοκληρώθηκε. Οι τοπικές αλλαγές παραμένουν στη συσκευή.");
+          if (navigator.onLine === false) syncStatus("unavailable");
         }
       } catch {
-        say("Η ανανέωση απέτυχε. Δοκίμασε ξανά.");
+        syncStatus("unavailable");
       } finally {
         refreshButton.removeAttribute("aria-busy");
         refreshButton.disabled = false;
