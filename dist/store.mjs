@@ -7,6 +7,8 @@ const endpoint = location.hostname === "andrew-imerisio-planner.flutedcloth5.cha
 
 const sessionKey = "planner.account.session.v1";
 export function accountName(token) {
+  const managed=/^v3\.([a-z0-9][a-z0-9_-]{1,31})\.\d{13}\.[0-9a-f]{64}\.[0-9a-f]{64}$/.exec(token||"");
+  if(managed && managed[1]!=="markarv")return managed[1];
   if (/^v2\.marmich\.\d{13}\.[0-9a-f]{64}\.[0-9a-f]{64}$/.test(token || "")) return "marmich";
   if (/^\d{13}\.[0-9a-f]{64}\.[0-9a-f]{64}$/.test(token || "")) return "markarv";
   return null;
@@ -49,12 +51,12 @@ async function authRequest(path, options = {}, token) {
 }
 export async function signIn(username,password,persistent=true,accountVersion=1) {
   const data = await authRequest("login",{method:"POST",body:JSON.stringify({username,password,accountVersion})});
-  if (!accountName(data.token) || accountName(data.token)!==data.username || (accountVersion!==2 && data.username!=="markarv")) throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
+  if (!accountName(data.token) || accountName(data.token)!==data.username || (accountVersion!==3 && data.token.startsWith("v3.")) || (accountVersion<2 && data.username!=="markarv")) throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
   remember(data.token,persistent); return data.token;
 }
 export async function restoreSession(accountVersion=1) {
   const token=storedSession();
-  if (!token || (accountVersion!==2 && accountName(token)!=="markarv")) return null;
+  if (!token || (accountVersion!==3 && token.startsWith("v3.")) || (accountVersion<2 && accountName(token)!=="markarv")) return null;
   try {
     const data=await authRequest("session",{},token);
     if (data.ok===true && accountName(token) && data.username===accountName(token)) return token;
@@ -364,7 +366,7 @@ export async function openPlanner(token) {
       else window.addEventListener("storage", event => {
         if (event.key === accountChannel) otherTab();
       });
-      window.addEventListener("storage", event => { if (event.key===sessionKey && !event.newValue && !storedSession()) location.reload(); });
+      window.addEventListener("storage", event => { if (event.key===sessionKey && storedSession()!==token && (!storedSession() || accountName(storedSession())!==account)) location.reload(); });
       window.addEventListener("focus", kick);
       window.addEventListener("online", kick);
       window.addEventListener("offline", kick);
