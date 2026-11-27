@@ -7,12 +7,12 @@ async function startPlanner() {
   const bookDialog = $("book-dialog");
   const noteForm = $("note-form");
   const bookForm = $("book-form");
-  const [{ colors, presets }, { openPlanner, legacyEntries, signIn, restoreSession, signOut }] = await Promise.all([
+  const [{ colors, presets }, { openPlanner, legacyEntries, signIn, restoreSession, signOut, accountName }] = await Promise.all([
     import("./model.mjs"), import("./store.mjs")
   ]);
   let session;
   let restoreError="";
-  try { session=await restoreSession(); } catch(error) { restoreError=error.message||"Δεν ήταν δυνατός ο έλεγχος σύνδεσης."; }
+  try { session=await restoreSession(2); } catch(error) { restoreError=error.message||"Δεν ήταν δυνατός ο έλεγχος σύνδεσης."; }
   if (!session) {
     const login=$("login-screen"), form=$("login-form"), error=$("login-error"), submit=$("login-submit");
     login.hidden=false;
@@ -22,7 +22,7 @@ async function startPlanner() {
         event.preventDefault(); if(submit.disabled)return;
         submit.disabled=true; error.hidden=true;
         try {
-          const token=await signIn($("login-username").value,$("login-password").value,$("login-remember")?.checked!==false);
+          const token=await signIn($("login-username").value,$("login-password").value,$("login-remember")?.checked!==false,2);
           $("login-password").value=""; login.hidden=true; resolve(token);
         } catch(e) { error.textContent=e.message||"Αποτυχία σύνδεσης.";error.hidden=false; }
         finally {submit.disabled=false;}
@@ -64,7 +64,7 @@ async function startPlanner() {
   async function loadData() {
     const ticket = ++reading;
     const entries = store ? await store.all() : [
-      ...presets.map(value => ({ key: "book:" + value.id, value })), ...legacyEntries()
+      ...presets.map(value => ({ key: "book:" + value.id, value })), ...(accountName?.(session)==="markarv"?legacyEntries():[])
     ];
     if (ticket !== reading) return;
     const loadedBooks = [], loadedNotes = [], loadedFoods = [], nextVersions = new Map();

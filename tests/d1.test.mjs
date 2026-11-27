@@ -91,3 +91,28 @@ test("food records sync independently without breaking old clients", async()=>{
   assert.equal((await call(b,"planner","PUT",{...meal,version:version(2),value:null,base:meal.version})).status,200);
   assert.equal((await (await call(a,"planner?types=all")).json()).records[0].value,null);
 });
+
+test("second account isolates records and cannot migrate legacy data",async()=>{
+  const env={...database(),PASSWORD:"test-original",MARMICH_AUTH:JSON.stringify({password:"test-second",sessionKey:randomBytes(32).toString("hex")})};
+  const call=(token,path,method="GET",data)=>worker.fetch(new Request("https://planner.test/api/"+path,{
+    method,headers:token?{Authorization:"Bearer "+token}:{},body:data?JSON.stringify(data):undefined
+  }),env);
+  const old=await (await call(null,"login","POST",{username:"markarv",password:env.PASSWORD})).json();
+  assert.equal((await call(null,"login","POST",{username:"marmich",password:"test-second"})).status,401);
+  const response=await call(null,"login","POST",{username:"Marmich",password:"test-second",accountVersion:2});
+  assert.equal(response.status,200);
+  const second=await response.json();
+  assert.equal(second.username,"marmich");
+  assert.equal((await (await call(old.token,"session")).json()).username,"markarv");
+  assert.equal((await (await call(second.token,"session")).json()).username,"marmich");
+  const book={key:"book:shopping",version:"0000000000000001-00000000-0000-4000-8000-000000000000",value:presets[0]};
+  assert.equal((await call(old.token,"planner","PUT",book)).status,200);
+  assert.deepEqual((await (await call(second.token,"planner")).json()).records,[]);
+  assert.equal((await call(second.token,"planner","PUT",{...book,value:null})).status,200);
+  assert.deepEqual((await (await call(old.token,"planner")).json()).records,[book]);
+  assert.equal((await (await call(second.token,"planner")).json()).records[0].value,null);
+  assert.equal((await call(second.token,"migrate","POST",{legacyToken:"f".repeat(64)})).status,403);
+  env.MARMICH_AUTH=JSON.stringify({password:"changed",sessionKey:randomBytes(32).toString("hex")});
+  assert.equal((await call(second.token,"session")).status,401);
+  assert.equal((await call(old.token,"session")).status,200);
+});

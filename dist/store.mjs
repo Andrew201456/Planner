@@ -6,6 +6,11 @@ const endpoint = location.hostname === "andrew-imerisio-planner.flutedcloth5.cha
   ? "https://planner.asmylonas8.workers.dev/api/" : "/api/";
 
 const sessionKey = "planner.account.session.v1";
+export function accountName(token) {
+  if (/^v2\.marmich\.\d{13}\.[0-9a-f]{64}\.[0-9a-f]{64}$/.test(token || "")) return "marmich";
+  if (/^\d{13}\.[0-9a-f]{64}\.[0-9a-f]{64}$/.test(token || "")) return "markarv";
+  return null;
+}
 function storedSession() {
   for (const type of ["sessionStorage","localStorage"]) {
     try { const token=window[type].getItem(sessionKey); if(token)return token; } catch {}
@@ -42,17 +47,17 @@ async function authRequest(path, options = {}, token) {
     return data;
   } finally { clearTimeout(timer); }
 }
-export async function signIn(username,password,persistent=true) {
-  const data = await authRequest("login",{method:"POST",body:JSON.stringify({username,password})});
-  if (typeof data.token !== "string") throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
+export async function signIn(username,password,persistent=true,accountVersion=1) {
+  const data = await authRequest("login",{method:"POST",body:JSON.stringify({username,password,accountVersion})});
+  if (!accountName(data.token) || accountName(data.token)!==data.username || (accountVersion!==2 && data.username!=="markarv")) throw new Error("Η σύνδεση δεν επιβεβαιώθηκε.");
   remember(data.token,persistent); return data.token;
 }
-export async function restoreSession() {
+export async function restoreSession(accountVersion=1) {
   const token=storedSession();
-  if (!token) return null;
+  if (!token || (accountVersion!==2 && accountName(token)!=="markarv")) return null;
   try {
     const data=await authRequest("session",{},token);
-    if (data.ok===true && data.username==="markarv") return token;
+    if (data.ok===true && accountName(token) && data.username===accountName(token)) return token;
   } catch(error) { if (error.status!==401) throw error; }
   signOut(); return null;
 }
@@ -108,7 +113,11 @@ export function legacyEntries() {
 }
 
 export async function openPlanner(token) {
-  const opening = indexedDB.open("planner.v2", 1);
+  const account=accountName(token);
+  if (!account) throw new Error("Μη έγκυρη συνεδρία.");
+  const legacyOwner=account==="markarv";
+  const accountChannel=legacyOwner?channelName:channelName+"."+account;
+  const opening = indexedDB.open(legacyOwner?"planner.v2":"planner.v2.account."+account, 1);
   opening.onupgradeneeded = () => {
     const entries = opening.result.createObjectStore("entries", { keyPath: "key" });
     entries.createIndex("dirty", "dirty");
@@ -116,11 +125,11 @@ export async function openPlanner(token) {
   };
   const db = await result(opening);
   db.onversionchange = () => db.close();
-  const legacy = legacyEntries();
+  const legacy = legacyOwner?legacyEntries():[];
   const { legacyToken, writer, migrated } = await transact(db, ["settings", "entries"], "readwrite", async tx => {
     const settings = tx.objectStore("settings");
     const entries = tx.objectStore("entries");
-    const legacyToken = await result(settings.get("token"));
+    const legacyToken = legacyOwner?await result(settings.get("token")):null;
     const migrated = !!await result(settings.get("accountMigrated"));
     let writer = await result(settings.get("writer"));
     if (!writer) { writer = crypto.randomUUID(); settings.put(writer, "writer"); }
@@ -130,7 +139,8 @@ export async function openPlanner(token) {
     for (const { key, value } of legacy) {
       if (!await result(entries.getKey(key))) entries.put({ key, version: nextVersion(), value, dirty: 1 });
     }
-    return { legacyToken, writer, migrated };
+    if (!legacyOwner && !migrated) settings.put(true,"accountMigrated");
+    return { legacyToken, writer, migrated:!legacyOwner||migrated };
   });
   // Only remove the legacy copy after the records and their pending uploads committed together.
   for (const { source, raw } of legacy) {
@@ -143,20 +153,20 @@ export async function openPlanner(token) {
   const edit = (fn, session = token) => scoped("readwrite", fn, session);
   const editEntries = fn => transact(db, "entries", "readwrite", tx => fn(tx.objectStore("entries")));
   const dirty = () => read(entries => entries.index("dirty").count(1));
-  const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(channelName) : null;
+  const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(accountChannel) : null;
   let onChange = () => {}, onStatus = () => {}, onConflict = () => {};
   let running = null, manualRefresh = null, scheduled = false, timer, backoff = 2000;
   let migrationPending = !migrated;
 
   function notify() {
     if (channel) channel.postMessage("changed");
-    else try { localStorage.setItem(channelName, crypto.randomUUID()); } catch { /* Refreshes on foreground. */ }
+    else try { localStorage.setItem(accountChannel, crypto.randomUUID()); } catch { /* Refreshes on foreground. */ }
   }
 
   async function api(path, options, session) {
     try { return await authRequest(path,options,session); }
     catch(error) {
-      if (error.status===401) { signOut(); location.reload(); }
+      if (error.status===401 && storedSession()===token) { signOut(); location.reload(); }
       throw error;
     }
   }
@@ -352,7 +362,7 @@ export async function openPlanner(token) {
       }
       if (channel) channel.onmessage = otherTab;
       else window.addEventListener("storage", event => {
-        if (event.key === channelName) otherTab();
+        if (event.key === accountChannel) otherTab();
       });
       window.addEventListener("storage", event => { if (event.key===sessionKey && !event.newValue && !storedSession()) location.reload(); });
       window.addEventListener("focus", kick);
