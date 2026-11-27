@@ -641,3 +641,12 @@ body{isolation:isolate;background:var(--paper)}
  .daily-stat{padding:7px;min-height:104px}
  .daily-stat>span:last-child{font-size:.65rem}
 }
+
+/* Compact two-tile daily summary and transient sync confirmation. */
+.daily-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sync-status{opacity:1;transform:translateY(0);max-height:80px;overflow:hidden;transition:opacity .32s ease,transform .32s ease,max-height .32s ease,padding .32s ease,margin .32s ease;animation:sync-enter .22s ease-out}
+.sync-status.sync-leaving{opacity:0;transform:translateY(-5px);max-height:0;padding-block:0;margin-block:0;pointer-events:none}
+.sync-status[data-state="unavailable"]{background:#fff1dc;color:#81501b}
+:root[data-theme="dark"] .sync-status[data-state="unavailable"]{background:#3e3022;color:#ffcf91}
+@keyframes sync-enter{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.sync-status{animation:none;transition:none}}
