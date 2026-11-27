@@ -11,9 +11,9 @@ function database() {
     const statement = () => sqlite.prepare(sql);
     return {
       bind: (...args) => prepare(sql, args),
-      run: async () => statement().run(...params),
+      run: async () => {const result=statement().run(...params);return {meta:{changes:Number(result.changes)}};},
       all: () => ({ results: statement().all(...params) }),
-      first: async column => statement().get(...params)?.[column] ?? null
+      first: async column => {const row=statement().get(...params);return column===undefined?row??null:row?.[column]??null}
     };
   }
   return {
@@ -115,4 +115,48 @@ test("second account isolates records and cannot migrate legacy data",async()=>{
   env.MARMICH_AUTH=JSON.stringify({password:"changed",sessionKey:randomBytes(32).toString("hex")});
   assert.equal((await call(second.token,"session")).status,401);
   assert.equal((await call(old.token,"session")).status,200);
+});
+
+test("admin creates isolated users, protects markarv and deletes only confirmed managed account",async()=>{
+ const env={...database(),PASSWORD:"test-original",PLANNER_ADMIN_PASSWORD:"test-admin"};
+ const call=(token,path,method="GET",data)=>worker.fetch(new Request("https://planner.test/api/"+path,{
+ method,headers:{"CF-Connecting-IP":"192.0.2.1",...(token?{Authorization:"Bearer "+token}:{})},body:data?JSON.stringify(data):undefined}),env);
+ const login=async(username,password,accountVersion=3)=>call(null,"login","POST",{username,password,accountVersion});
+ const admin=(action,extra={})=>call(null,"admin","POST",{action,adminPassword:env.PLANNER_ADMIN_PASSWORD,...extra});
+ const original=await (await login("markarv",env.PASSWORD,1)).json();
+ const book={key:"book:shopping",version:"0000000000000001-00000000-0000-4000-8000-000000000000",value:presets[0]};
+ assert.equal((await call(original.token,"planner","PUT",book)).status,200);
+ assert.equal((await admin("list",{adminPassword:"wrong"})).status,401);
+ assert.equal((await admin("create",{username:"markarv",password:"test-password"})).status,403);
+ assert.equal((await admin("delete",{username:"markarv",confirmed:true,confirmUsername:"markarv"})).status,403);
+ assert.equal((await admin("password",{username:"markarv",password:"test-password"})).status,403);
+ assert.equal((await admin("create",{username:"Marmich",password:"test-password"})).status,201);
+ assert.equal((await admin("create",{username:"marmich",password:"test-password"})).status,409);
+ const identity=await env.DB.prepare("SELECT * FROM planner_accounts WHERE username=?").bind("marmich").first();
+ assert.notEqual(identity.verifier,"test-password");assert.equal(identity.session_key.length,64);
+ assert.equal((await login("marmich","test-password",2)).status,401);
+ const response=await login("marmich","test-password");
+ assert.equal(response.status,200);const second=await response.json();
+ assert.equal((await (await call(second.token,"session")).json()).username,"marmich");
+ assert.deepEqual((await (await call(second.token,"planner")).json()).records,[]);
+ assert.equal((await call(second.token,"planner","PUT",book)).status,200);
+ assert.equal((await call(second.token,"migrate","POST",{legacyToken:"f".repeat(64)})).status,403);
+ const list=await (await admin("list")).json();
+ assert.equal(list.accounts.length,2);
+ assert.equal(list.accounts.find(a=>a.username==="markarv").protected,true);
+ assert.equal(list.accounts.find(a=>a.username==="marmich").ip,"192.0.2.1");
+ assert.ok(!JSON.stringify(list).includes(identity.verifier)&&!JSON.stringify(list).includes(identity.session_key));
+ assert.equal((await admin("password",{username:"marmich",password:"new-password"})).status,200);
+ assert.equal((await call(second.token,"session")).status,401);
+ const changed=await (await login("marmich","new-password")).json();
+ assert.deepEqual((await (await call(changed.token,"planner")).json()).records,[book]);
+ assert.equal((await admin("delete",{username:"marmich",confirmed:true,confirmUsername:"wrong"})).status,400);
+ assert.equal((await call(changed.token,"session")).status,200);
+ assert.equal((await admin("delete",{username:"marmich",confirmed:true,confirmUsername:"marmich"})).status,200);
+ assert.equal((await call(changed.token,"planner","PUT",book)).status,401);
+ assert.equal((await login("marmich","new-password")).status,401);
+ assert.equal((await admin("create",{username:"marmich",password:"new-password"})).status,409);
+ assert.deepEqual((await (await call(original.token,"planner")).json()).records,[book]);
+ assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM planner_records WHERE planner_id=?").bind("account:marmich").first("n"),0);
+ assert.equal((await call(original.token,"session")).status,200);
 });

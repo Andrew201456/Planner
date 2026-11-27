@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'"><title>Planner · Διαχείριση</title>
+<style>
+*{box-sizing:border-box}html{color-scheme:dark}body{margin:0;background:#101827;color:#e5edf8;font:15px/1.5 system-ui,sans-serif;min-height:100vh;padding:24px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}main{max-width:1000px;margin:auto}h1{font-size:clamp(1.7rem,5vw,2.4rem);margin:0}h2{font-size:1.15rem;margin:0 0 14px}p{color:#a6b8cf}header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:24px}.card{background:#1b283c;border:1px solid #354760;border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:0 12px 35px #0002}#gate{max-width:440px;margin:9vh auto}label{display:grid;gap:5px;font-weight:600;color:#ccd8e9;font-size:.85rem}input,button{font:inherit;border:1px solid #42546f;border-radius:12px;padding:11px 12px;min-height:44px;color:inherit;background:#111d2e;min-width:0}button{cursor:pointer;background:#2c4160;font-weight:650}button.primary{background:#b4d2ff;color:#142e51;border-color:transparent}button.danger{color:#ffb6bc;background:#492c3c}button:disabled{opacity:.5;cursor:default}input{width:100%}form{display:grid;gap:12px}#create{grid-template-columns:1fr 1fr auto;align-items:end}.toolbar,.actions{display:flex;gap:8px;flex-wrap:wrap}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:680px}td,th{text-align:left;padding:12px 8px;border-bottom:1px solid #354760}th{font-size:.77rem;color:#a6b8cf}td{font-size:.85rem}small{color:#a6b8cf}.status{white-space:pre-wrap;min-height:1.5em;color:#a6d9bb}.status[data-error="true"]{color:#ffb6bc}[hidden]{display:none!important}.count{font-size:2rem;font-weight:750;color:#b4d2ff}a{color:#b4d2ff}button:focus-visible,input:focus-visible{outline:2px solid #b4d2ff;outline-offset:3px}@media(max-width:600px){#create{grid-template-columns:1fr}.card{padding:16px}body{padding-top:calc(16px + env(safe-area-inset-top,0px))}}
+</style></head>
+<body><main><header><div><small>PLANNER / ADMIN</small><h1>Διαχείριση λογαριασμών</h1></div><a href="/">Επιστροφή στο Planner</a></header>
+<section id="gate" class="card"><h2>Σύνδεση διαχειριστή</h2><form id="login"><label>Master Admin password<input id="admin-password" type="password" maxlength="256" required autocomplete="current-password"></label><button class="primary" type="submit">Σύνδεση</button></form><p id="login-status" class="status" role="status"></p></section>
+<section id="dashboard" hidden><div class="card"><header><div><small>Ενεργοί λογαριασμοί</small><div class="count" id="count">—</div></div><div class="toolbar"><button id="refresh" type="button">Ανανέωση</button><button id="lock" type="button">Κλείδωμα</button></div></header><small>Οι παλιοί λογαριασμοί προστατεύονται από αλλαγή και διαγραφή.</small></div>
+<div class="card"><h2>Δημιουργία λογαριασμού</h2><form id="create"><label>Username<input id="new-user" required maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label>Password<input id="new-password" type="password" required minlength="4" maxlength="128" autocomplete="new-password"></label><button class="primary" type="submit">Δημιουργία</button></form><p id="action-status" role="status" class="status"></p></div>
+<div class="card"><h2>Λογαριασμοί</h2><label>Αναζήτηση<input id="search" type="search" autocomplete="off" placeholder="Username"></label><div class="scroll"><table><thead><tr><th>Username</th><th>Δημιουργία</th><th>Τελευταία σύνδεση</th><th>IP</th><th>Ενέργειες</th></tr></thead><tbody id="rows"></tbody></table></div><p><small>Εμφανίζεται η τελευταία επιτυχής σύνδεση μετά την ενεργοποίηση της διαχείρισης. Δεν εμφανίζονται κωδικοί ή περιεχόμενο σημειώσεων.</small></p></div></section>
+</main><script>
+"use strict";
+const $=id=>document.getElementById(id);
+let secret="",accounts=[],busy=false,sequence=0,timeout;
+const errors={admin_not_configured:"Δεν έχει οριστεί PLANNER_ADMIN_PASSWORD.",credentials:"Λάθος κωδικός διαχείρισης.",rate_limit:"Πολλές προσπάθειες. Δοκίμασε ξανά σε 10 λεπτά.",username:"Username: 2–32 λατινικοί χαρακτήρες, αριθμοί, - ή _.",password:"Ο κωδικός πρέπει να έχει 4–128 χαρακτήρες.",protected:"Ο υπάρχων λογαριασμός προστατεύεται.",exists:"Το username χρησιμοποιείται, έχει παλιά δεδομένα ή έχει διαγραφεί.",confirmation:"Η επιβεβαίωση διαγραφής δεν είναι έγκυρη.",not_found:"Ο λογαριασμός δεν βρέθηκε."};
+function status(id,message,error=false){$(id).textContent=message;$(id).dataset.error=String(error)}
+function touch(){clearTimeout(timeout);if(secret)timeout=setTimeout(lock,600000)}
+function lock(){++sequence;secret="";accounts=[];busy=false;clearTimeout(timeout);$("dashboard").hidden=true;$("gate").hidden=false;$("admin-password").value="";$("new-password").value="";$("rows").replaceChildren();$("count").textContent="—";status("action-status","");status("login-status","");$("login").querySelector("button").disabled=false;}
+function draw(){
+ const body=$("rows");body.replaceChildren();const term=$("search").value.trim().toLowerCase();
+ const date=v=>Number.isFinite(v)?new Date(v).toLocaleString("el-GR"):"—";
+ for(const account of accounts.filter(x=>x.username.includes(term))){
+  const tr=document.createElement("tr");for(const value of [account.username,date(account.created_at),date(account.last_login),account.ip||"—"]){const td=document.createElement("td");td.textContent=value;tr.append(td)}
+  const td=document.createElement("td"),actions=document.createElement("div");actions.className="actions";
+  if(account.protected){actions.textContent="Προστατευμένος"}else{
+   const pass=document.createElement("button");pass.type="button";pass.textContent="Κωδικός";pass.disabled=busy;pass.onclick=()=>{const p=prompt("Νέος κωδικός για "+account.username);if(p!==null&&p.length>=4&&p.length<=128)mutate("password",{username:account.username,password:p});else if(p!==null)status("action-status",errors.password,true)};
+   const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Διαγραφή";del.disabled=busy;del.onclick=()=>{if(!confirm("Θέλεις σίγουρα να διαγράψεις τον λογαριασμό "+account.username+" και τα online δεδομένα του;"))return;const name=prompt("Για οριστική διαγραφή πληκτρολόγησε ακριβώς: "+account.username);if(name!==account.username)return;mutate("delete",{username:account.username,confirmed:true,confirmUsername:name})};actions.append(pass,del);
+  }td.append(actions);tr.append(td);body.append(tr);
+ }
+ $("count").textContent=String(accounts.length);
+}
+function setBusy(value){busy=value;for(const b of document.querySelectorAll("#create button,#refresh"))b.disabled=value;draw()}
+async function request(action,extra={}){
+ const response=await fetch("/api/admin",{method:"POST",cache:"no-store",credentials:"omit",redirect:"error",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,adminPassword:secret,...extra})});
+ const data=await response.json();if(!response.ok){const e=new Error(errors[data.error]||"Η ενέργεια δεν ολοκληρώθηκε. Δοκίμασε ξανά.");e.code=response.status;throw e}return data;
+}
+async function refresh(){const data=await request("list");if(!Array.isArray(data.accounts))throw Error("Μη έγκυρη απάντηση.");return data;}
+async function mutate(action,extra={}){
+ if(busy||!secret)return;const ticket=sequence;setBusy(true);touch();status("action-status","Επεξεργασία…");
+ try{await request(action,extra);if(ticket!==sequence)return;status("action-status",action==="delete"?"Ο λογαριασμός διαγράφηκε.":action==="password"?"Ο κωδικός άλλαξε.":"Ο λογαριασμός δημιουργήθηκε.");
+ if(action==="create"){$("new-user").value="";$("new-password").value=""}
+ try{const data=await refresh();if(ticket===sequence){accounts=data.accounts;draw();}}catch{if(ticket===sequence)status("action-status","Η αλλαγή ολοκληρώθηκε. Πάτησε Ανανέωση για τη λίστα.");}
+ }catch(e){if(ticket!==sequence)return;if(e.code===401){lock();status("login-status",e.message,true)}else status("action-status",e.message,true)}
+ finally{if(ticket===sequence)setBusy(false)}
+}
+$("login").onsubmit=async e=>{e.preventDefault();if(busy)return;secret=$("admin-password").value;$("admin-password").value="";const ticket=++sequence;busy=true;$("login").querySelector("button").disabled=true;
+ try{const data=await refresh();if(ticket!==sequence)return;accounts=data.accounts;$("gate").hidden=true;$("dashboard").hidden=false;draw();touch();}
+ catch(e){if(ticket===sequence){secret="";status("login-status",e.message,true)}}
+ finally{if(ticket===sequence){busy=false;$("login").querySelector("button").disabled=false;draw()}}
+};
+$("create").onsubmit=e=>{e.preventDefault();mutate("create",{username:$("new-user").value,password:$("new-password").value})};
+$("refresh").onclick=async()=>{if(busy||!secret)return;const ticket=sequence;setBusy(true);try{const data=await refresh();if(ticket===sequence){accounts=data.accounts;draw();status("action-status","Η λίστα ενημερώθηκε.");}}catch(e){if(ticket===sequence){if(e.code===401){lock();status("login-status",e.message,true)}else status("action-status",e.message,true)}}finally{if(ticket===sequence)setBusy(false)}};
+$("search").oninput=draw;$("lock").onclick=lock;window.addEventListener("pagehide",lock);document.addEventListener("pointerdown",touch);document.addEventListener("keydown",touch);
+</script></body></html>
