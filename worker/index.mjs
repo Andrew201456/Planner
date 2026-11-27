@@ -9,7 +9,15 @@ const table = `CREATE TABLE IF NOT EXISTS planner_records (
 const deviceTable = `CREATE TABLE IF NOT EXISTS planner_devices (
   device_id TEXT PRIMARY KEY, planner_id TEXT NOT NULL
 ) WITHOUT ROWID`;
-const account = "account:markarv";
+const legacyAccount = "account:markarv";
+// A separate high-entropy signing key prevents a short PIN from being used to forge sessions.
+function marmichAuth(env) {
+  try {
+    const value = JSON.parse(env.MARMICH_AUTH || "null");
+    if (typeof value?.password !== "string" || !value.password || value.password.length > 1024 || !/^[0-9a-f]{64}$/.test(value.sessionKey || "")) return null;
+    return value;
+  } catch { return null; }
+}
 const loginTable = `CREATE TABLE IF NOT EXISTS planner_login_limits (
   client_id TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempts INTEGER NOT NULL
 ) WITHOUT ROWID`;
@@ -76,6 +84,24 @@ async function verifySession(password, request) {
   return equal(match[3], await signature(password, match[1] + "." + match[2]));
 }
 
+async function identifySession(env, request) {
+  const auth = request.headers.get("Authorization") || "";
+  const match = /^Bearer v2\.marmich\.(\d{13})\.([0-9a-f]{64})\.([0-9a-f]{64})$/.exec(auth);
+  if (match) {
+    const config = marmichAuth(env);
+    if (!config || Number(match[1]) <= Date.now() || Number(match[1]) > Date.now() + sessionDays * 86400000) return null;
+    const expected = await signature(config.sessionKey, "v2.marmich." + match[1] + "." + match[2]);
+    return equal(match[3],expected) ? "marmich" : null;
+  }
+  return typeof env.PASSWORD === "string" && env.PASSWORD && await verifySession(env.PASSWORD, request) ? "markarv" : null;
+}
+async function issueMarmichSession(key) {
+  const expires = Date.now() + sessionDays * 86400000;
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2,"0")).join("");
+  const body = "v2.marmich." + expires + "." + nonce;
+  return body + "." + await signature(key,body);
+}
+
 async function login(request, env, json) {
   const input = await readRecord(request, 4096);
   if (!input || typeof input.username !== "string" || typeof input.password !== "string" || input.password.length > 1024) return json({error:"credentials"}, 400);
@@ -87,10 +113,13 @@ async function login(request, env, json) {
     window_start=CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END
     RETURNING attempts`).bind(id, now, cutoff, cutoff).all();
   if (results[0].attempts > 10) return json({error:"rate_limit"},429);
-  if (input.username.trim().toLowerCase() !== "markarv" ||
-      !equal(await digest(input.password), await digest(env.PASSWORD))) return json({error:"credentials"},401);
+  const username = input.username.trim().toLowerCase();
+  const extra = username === "marmich" && input.accountVersion === 2 ? marmichAuth(env) : null;
+  const password = username === "markarv" ? env.PASSWORD : extra?.password;
+  if (typeof password !== "string" || !password ||
+      !equal(await digest(input.password), await digest(password))) return json({error:"credentials"},401);
   await env.DB.prepare("DELETE FROM planner_login_limits WHERE client_id = ?").bind(id).run();
-  return json({token: await issueSession(env.PASSWORD), username:"markarv"});
+  return json({token: extra ? await issueMarmichSession(extra.sessionKey) : await issueSession(password), username});
 }
 
 export default {
@@ -114,15 +143,17 @@ export default {
         return json({ ok: true, storage: "D1" });
       }
       if (!["/api/planner", "/api/login", "/api/session", "/api/migrate", "/api/diagnostics"].includes(url.pathname)) return json({error:"route"},404);
-      if (typeof env.PASSWORD !== "string" || !env.PASSWORD) return json({error:"password_not_configured"},503);
+      if ((typeof env.PASSWORD !== "string" || !env.PASSWORD) && !marmichAuth(env)) return json({error:"password_not_configured"},503);
       await prepare(env.DB);
       if (url.pathname === "/api/login") {
         return request.method === "POST" ? await login(request,env,json) : json({error:"method"},405);
       }
-      if (!await verifySession(env.PASSWORD, request)) return json({error:"authorization"},401);
-      const owner = account;
-      if (url.pathname === "/api/session") return request.method === "GET" ? json({ok:true,username:"markarv"}) : json({error:"method"},405);
+      const username = await identifySession(env, request);
+      if (!username) return json({error:"authorization"},401);
+      const owner = username === "markarv" ? legacyAccount : "account:marmich";
+      if (url.pathname === "/api/session") return request.method === "GET" ? json({ok:true,username}) : json({error:"method"},405);
       if (url.pathname === "/api/migrate") {
+        if (username !== "markarv") return json({error:"authorization"},403);
         if (request.method !== "POST") return json({error:"method"},405);
         const input = await readRecord(request,2048);
         if (!input || typeof input.legacyToken !== "string" || !/^[0-9a-f]{64}$/.test(input.legacyToken)) return json({error:"legacy_token"},400);
