@@ -12,7 +12,7 @@ async function startPlanner() {
   ]);
   let session;
   let restoreError="";
-  try { session=await restoreSession(2); } catch(error) { restoreError=error.message||"Δεν ήταν δυνατός ο έλεγχος σύνδεσης."; }
+  try { session=await restoreSession(3); } catch(error) { restoreError=error.message||"Δεν ήταν δυνατός ο έλεγχος σύνδεσης."; }
   if (!session) {
     const login=$("login-screen"), form=$("login-form"), error=$("login-error"), submit=$("login-submit");
     login.hidden=false;
@@ -22,7 +22,7 @@ async function startPlanner() {
         event.preventDefault(); if(submit.disabled)return;
         submit.disabled=true; error.hidden=true;
         try {
-          const token=await signIn($("login-username").value,$("login-password").value,$("login-remember")?.checked!==false,2);
+          const token=await signIn($("login-username").value,$("login-password").value,$("login-remember")?.checked!==false,3);
           $("login-password").value=""; login.hidden=true; resolve(token);
         } catch(e) { error.textContent=e.message||"Αποτυχία σύνδεσης.";error.hidden=false; }
         finally {submit.disabled=false;}
