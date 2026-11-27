@@ -257,13 +257,13 @@ export async function openPlanner(token) {
       // Acknowledge local uploads before fetching the rest of the account.
       // Large paginated histories on mobile must not keep the save indicator busy.
       const afterPush = await dirty();
-      if (!afterPush) onStatus(wrote ? "saved" : "ready");
+      // Success is reported only after the full pull, not just uploaded writes.
       const complete = !afterPush && await pages(session, async records => {
         if (await applyRemote(records, session)) { notify(); await onChange(); }
       });
       const remaining = await dirty();
       scheduled ||= remaining > 0 || !complete;
-      onStatus(remaining ? "sending" : wrote ? "saved" : "ready");
+      onStatus(complete && remaining === 0 ? (wrote ? "saved" : "ready") : "sending");
       backoff = 2000;
       return complete && remaining === 0;
     } catch {
