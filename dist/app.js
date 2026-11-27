@@ -362,7 +362,7 @@ async function startPlanner() {
     finally{saving(foodForm,false);}
   });
 
-  let renderedView = "", renderedTab = -1;
+  let renderedView = "", renderedTab = -1, renderedMarkup = "";
   let pageMotion, tabMotion;
   const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
   function animateNavigation(viewKey, tabIndex) {
@@ -434,9 +434,9 @@ async function startPlanner() {
     }
     const markup = (storageMessage ? `<p class="storage-error" role="alert">${html(storageMessage)}</p>` : "") + page;
     // Avoid replacing controls or replaying effects when a poll has no visual changes.
-    if (main.dataset.renderedMarkup !== markup) {
+    if (renderedMarkup !== markup) {
       main.innerHTML = markup;
-      main.dataset.renderedMarkup = markup;
+      renderedMarkup = markup;
     }
     document.title = (route.view === "book" ? route.book.name : route.view === "calendar" ? "Ημερολόγιο" : route.view === "food" ? "Τι τρώω" : "Σημειώσεις") + " · Planner";
     const viewKey = route.view === "book" ? "book:"+route.book.id : route.view;
@@ -594,7 +594,7 @@ async function startPlanner() {
     if (!n || !n.items[index]) return;
     const items = n.items.map((item, i) => i === index ? { ...item, done: box.checked } : item);
     try { await write("note", n.id, { ...n, items, updated: Date.now() }, versions.get("note:" + n.id)); }
-    catch (error) { say(error.message); await loadData(); delete main.dataset.renderedMarkup; }
+    catch (error) { say(error.message); await loadData(); renderedMarkup = ""; }
     render();
     if (!reducedMotion()) {
       const card = main.querySelector(`[data-note-card="${n.id}"]`);
