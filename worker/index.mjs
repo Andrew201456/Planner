@@ -75,7 +75,7 @@ async function admin(request,env,json){
       FROM planner_accounts a LEFT JOIN planner_account_activity l ON l.username=a.username
       WHERE a.deleted_at IS NULL ORDER BY a.username LIMIT 500`).all();
     const legacy=["markarv"];
-    if(marmichAuth(env))legacy.push("marmich");
+    if(marmichAuth(env)&&!await accountRow(db,"marmich"))legacy.push("marmich");
     const accounts=[];
     for(const username of legacy){
       const activity=await db.prepare("SELECT last_login,ip FROM planner_account_activity WHERE username=?").bind(username).first();
@@ -86,7 +86,7 @@ async function admin(request,env,json){
   }
   const username=cleanUsername(input.username);
   if(!validUsername(username))return json({error:"username"},400);
-  if(username==="markarv"||(username==="marmich"&&marmichAuth(env)))return json({error:"protected"},403);
+  if(username==="markarv"||(username==="marmich"&&marmichAuth(env)&&!await accountRow(db,username)))return json({error:"protected"},403);
   if(action==="create"||action==="password"){
     if(typeof input.password!=="string"||input.password.length<4||input.password.length>128)return json({error:"password"},400);
     const salt=randomHex(16),hash=await verifier(input.password,salt),key=randomHex(32);
@@ -189,6 +189,7 @@ async function identifySession(env, request) {
   const match = /^Bearer v2\.marmich\.(\d{13})\.([0-9a-f]{64})\.([0-9a-f]{64})$/.exec(auth);
   if (match) {
     const config = marmichAuth(env);
+    if (await accountRow(env.DB,"marmich"))return null;
     if (!config || Number(match[1]) <= Date.now() || Number(match[1]) > Date.now() + sessionDays * 86400000) return null;
     const expected = await signature(config.sessionKey, "v2.marmich." + match[1] + "." + match[2]);
     return equal(match[3],expected) ? {username:"marmich",managedKey:null} : null;
@@ -209,9 +210,10 @@ async function login(request, env, json) {
   if(!await gate(env.DB,id))return json({error:"rate_limit"},429);
   const username=cleanUsername(input.username);
   if(!validUsername(username))return json({error:"credentials"},401);
-  const extra=username==="marmich"&&input.accountVersion>=2?marmichAuth(env):null;
+  const extra=username==="marmich"&&input.accountVersion>=2&&!await accountRow(env.DB,username)?marmichAuth(env):null;
   let token,managedKey=null;
   if(username==="markarv"||extra){
+    if(username==="markarv"&&(typeof env.PASSWORD!=="string"||!env.PASSWORD))return json({error:"password_not_configured"},503);
     const password=extra?extra.password:env.PASSWORD;
     if(extra&&!await gate(env.DB,await digest("planner-login-account:"+username)))return json({error:"rate_limit"},429);
     if(typeof password!=="string"||!password||!equal(await digest(input.password),await digest(password)))return json({error:"credentials"},401);
