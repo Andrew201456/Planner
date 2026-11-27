@@ -527,3 +527,37 @@ body{isolation:isolate;background:var(--paper)}
 @media(prefers-reduced-motion:reduce){
  .ambient-background::before,.ambient-background::after{animation:none;transform:none;opacity:.85}
 }
+
+/* Let the existing animated ambient layer show through the header.
+   Do not add a filter/transform to this ancestor of the fixed mobile dock. */
+:root{--header-glass:rgba(250,249,245,.29);--note-track:rgba(65,92,135,.10);--note-complete:#337a4d;--note-edit-bg:rgba(65,92,135,.08)}
+:root[data-theme="dark"]{--header-glass:rgba(15,23,42,.27);--note-track:rgba(163,190,228,.14);--note-complete:#91d6a7;--note-edit-bg:rgba(168,195,235,.10)}
+.app-header{background:var(--header-glass)}
+.app-header .refresh-button,.app-header .theme-toggle{background:var(--glass-bg)}
+@media(max-width:730px){.app-header .devices-button{background:var(--glass-bg)}}
+/* Notes — clearer titles, type badges and completion indicators. */
+.note{border:1px solid var(--rule);border-left:4px solid var(--edge);padding:17px 19px;min-width:0}
+.note-head{gap:8px;margin-bottom:10px}
+.note-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.note-kind{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:.72rem;font-weight:550;white-space:nowrap}
+.note-kind svg{width:13px;height:13px}
+.note .book-tag{font-size:.74rem;max-width:100%;overflow-wrap:anywhere}
+.note h3{margin:0;font-size:1.13rem;line-height:1.4;letter-spacing:-.025em}
+.note .open-note{gap:12px;padding:3px 0}
+.note .open-note>span:first-child{min-width:0;overflow-wrap:anywhere}
+.note-edit-icon{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:var(--note-edit-bg);color:var(--blue)}
+.note .note-edit-icon svg{color:inherit;width:16px;height:16px}
+.note .excerpt{margin-top:7px;line-height:1.65;-webkit-line-clamp:4;color:var(--muted)}
+.note-progress{display:grid;gap:6px;padding:10px 12px;margin:10px 0 8px;border-radius:13px;background:var(--surface-subtle);color:var(--pen)}
+.note-progress-label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.73rem;font-weight:600}
+.note-progress-label strong{font-variant-numeric:tabular-nums}
+.note-progress progress{display:block;width:100%;height:6px;border:0;border-radius:999px;overflow:hidden;appearance:none;-webkit-appearance:none;background:var(--note-track);color:var(--pen)}
+.note-progress progress::-webkit-progress-bar{background:var(--note-track);border-radius:999px}
+.note-progress progress::-webkit-progress-value{background:currentColor;border-radius:999px}
+.note-progress progress::-moz-progress-bar{background:currentColor;border-radius:999px}
+.note-progress.complete{color:var(--note-complete)}
+.note .checklist label{gap:11px;min-height:44px;padding:5px 0;line-height:1.5;font-size:.91rem}
+.note .checklist input[type="checkbox"]{width:21px;height:21px;accent-color:var(--pen);flex:none}
+.note .checklist input:checked+span{opacity:.74}
+@media(hover:hover) and (pointer:fine){.note .open-note:hover .note-edit-icon{background:var(--cover);color:var(--pen)}}
+@media(max-width:730px){.note{padding:14px 15px}.note h3{font-size:1.06rem}.note-meta{gap:5px}.note-kind{font-size:.7rem}.note-progress{padding:9px 10px}}
