@@ -107,18 +107,24 @@ async function login(request, env, json) {
   if (!input || typeof input.username !== "string" || typeof input.password !== "string" || input.password.length > 1024) return json({error:"credentials"}, 400);
   const id = await digest("planner-login:" + (request.headers.get("CF-Connecting-IP") || "local"));
   const now = Date.now(), cutoff = now - 600000;
-  const { results } = await env.DB.prepare(`INSERT INTO planner_login_limits (client_id,window_start,attempts)
-    VALUES (?,?,1) ON CONFLICT(client_id) DO UPDATE SET
-    attempts=CASE WHEN window_start <= ? THEN 1 ELSE attempts+1 END,
-    window_start=CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END
-    RETURNING attempts`).bind(id, now, cutoff, cutoff).all();
-  if (results[0].attempts > 10) return json({error:"rate_limit"},429);
+  const gate = async client => {
+    const {results}=await env.DB.prepare(`INSERT INTO planner_login_limits (client_id,window_start,attempts)
+      VALUES (?,?,1) ON CONFLICT(client_id) DO UPDATE SET
+      attempts=CASE WHEN window_start <= ? THEN 1 ELSE attempts+1 END,
+      window_start=CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END
+      RETURNING attempts`).bind(client,now,cutoff,cutoff).all();
+    return results[0].attempts <= 10;
+  };
+  if (!await gate(id)) return json({error:"rate_limit"},429);
   const username = input.username.trim().toLowerCase();
   const extra = username === "marmich" && input.accountVersion === 2 ? marmichAuth(env) : null;
+  const accountGate = extra ? await digest("planner-login-account:marmich") : null;
+  if (accountGate && !await gate(accountGate)) return json({error:"rate_limit"},429);
   const password = username === "markarv" ? env.PASSWORD : extra?.password;
   if (typeof password !== "string" || !password ||
       !equal(await digest(input.password), await digest(password))) return json({error:"credentials"},401);
   await env.DB.prepare("DELETE FROM planner_login_limits WHERE client_id = ?").bind(id).run();
+  if (accountGate) await env.DB.prepare("DELETE FROM planner_login_limits WHERE client_id = ?").bind(accountGate).run();
   return json({token: extra ? await issueMarmichSession(extra.sessionKey) : await issueSession(password), username});
 }
 
