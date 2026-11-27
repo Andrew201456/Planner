@@ -189,12 +189,31 @@ async function startPlanner() {
     return `<button type="button" class="primary" data-new-note aria-label="Νέα σημείωση">${icon("plus")}<span>Νέα<span class="note-word"> σημείωση</span></span></button>`;
   }
 
+  function dailyOverview(today) {
+    const dated = notes.filter(n => n.date === today);
+    const meals = foods.filter(f => f.date === today);
+    const known = meals.filter(f => f.calories !== null);
+    const kcal = known.reduce((sum,f)=>sum+f.calories,0);
+    const lists = dated.filter(n=>n.kind==="list");
+    const tasks = lists.reduce((sum,n)=>sum+n.items.length,0);
+    const done = lists.reduce((sum,n)=>sum+n.items.filter(item=>item.done).length,0);
+    const count = dated.length;
+    return `<section class="daily-overview" aria-label="Η ημέρα μου">
+      <div class="daily-heading"><div><p class="daily-kicker">Η ΗΜΕΡΑ ΜΟΥ</p><h2>${html(dayFmt.format(parseDay(today)))}</h2></div><a class="daily-calendar" href="#calendar/${today}" aria-label="Άνοιγμα σημερινού ημερολογίου">${icon("calendar")}${icon("arrow")}</a></div>
+      <div class="daily-grid">
+        <a class="daily-stat daily-notes" href="#calendar/${today}"><span class="daily-stat-icon">${icon("pages")}</span><strong>${count}</strong><span>Σημειώσεις σήμερα</span></a>
+        <a class="daily-stat daily-tasks" href="#calendar/${today}"><span class="daily-stat-icon">${icon("check")}</span><strong>${done}<small> / ${tasks}</small></strong><span>Εργασίες ημέρας</span></a>
+        <a class="daily-stat daily-food" href="#food/${today}"><span class="daily-stat-icon">${icon("food")}</span><strong>${known.length?kcal.toLocaleString("el-GR"):"—"}<small> kcal</small></strong><span>${meals.length} καταχωρήσεις</span></a>
+      </div>
+    </section>`;
+  }
+
   function covers() {
     return books.map(book => {
       const count = notes.filter(n => n.bookId === book.id).length;
       const total = count === 1 ? "1 σημείωση" : `${count} σημειώσεις`;
       return `<a class="book-cover color-${book.color}" href="#book/${book.id}">
-        ${icon(book.icon, "cover-icon")}${icon("corner", "corner")}
+        <div class="book-cover-top">${icon(book.icon, "cover-icon")}<span class="book-open-arrow">${icon("arrow")}</span></div>
         <span class="book-name">${html(book.name)}</span><span class="book-count">${total}</span></a>`;
     }).join("");
   }
@@ -286,7 +305,7 @@ async function startPlanner() {
     const summary = known.length ? total.toLocaleString("el-GR")+" kcal" : "—";
     return `<section class="food-panel">
       <div class="section-head"><h2>${icon("food")} Τι τρώω</h2><button class="text-action" type="button" data-food-add="${day}">${icon("plus")} Προσθήκη</button></div>
-      <div class="food-total"><span>Καταγεγραμμένες θερμίδες <small>${list.length} καταχωρήσεις${known.length<list.length ? " · "+(list.length-known.length)+" χωρίς θερμίδες" : ""}</small></span><strong>${summary}</strong></div>
+      <div class="food-total"><div class="food-total-label"><span class="food-total-icon">${icon("food")}</span><span>Καταγεγραμμένες θερμίδες <small>${list.length} καταχωρήσεις${known.length<list.length ? " · "+(list.length-known.length)+" χωρίς θερμίδες" : ""}</small></span></div><strong>${summary}</strong></div>
       ${list.length ? '<ul class="food-list">'+list.map(f=>`<li><span class="food-bullet"></span><div><strong>${html(f.name)}</strong><small>${f.calories===null ? "Χωρίς θερμίδες" : f.calories.toLocaleString("el-GR")+" kcal"}</small></div><button type="button" class="icon-button" data-food-edit="${f.id}" aria-label="Επεξεργασία: ${html(f.name)}">${icon("pencil")}</button></li>`).join("")+'</ul>' : '<p class="food-empty">Δεν έχεις καταχωρήσει φαγητό για αυτή τη μέρα.</p>'}
       ${compact ? `<a class="text-action" href="#food/${day}">Άνοιγμα ημερολογίου φαγητού ${icon("arrow")}</a>` : ""}
     </section>`;
@@ -407,12 +426,18 @@ async function startPlanner() {
         ${noteList(notes.filter(n => n.bookId === b.id), "Δεν έχεις γράψει ακόμα σε αυτό το τετράδιο.")}</section>`;
     } else {
       page = `<div class="page-head"><h1>Σημειώσεις</h1>${newNoteButton()}</div>
+        ${dailyOverview(today)}
         <section><div class="section-head"><h2>Τα τετράδιά μου</h2><button class="text-action" type="button" data-new-book>${icon("plus")}Τετράδιο</button></div>
         <div class="book-grid">${covers()}</div></section>
         <div class="home-lower"><section><div class="section-head"><h2>Πρόσφατες σημειώσεις</h2></div>${noteList(notes, "Οι σημειώσεις σου θα εμφανίζονται εδώ.")}</section>
         <aside class="mini-calendar"><div class="section-head"><h2>Ημερολόγιο</h2><a href="${todayUrl}" class="text-action" aria-label="Άνοιγμα ημερολογίου">${icon("arrow")}</a></div>${calendarGrid(today, true)}</aside></div>`;
     }
-    main.innerHTML = (storageMessage ? `<p class="storage-error" role="alert">${storageMessage}</p>` : "") + page;
+    const markup = (storageMessage ? `<p class="storage-error" role="alert">${html(storageMessage)}</p>` : "") + page;
+    // Avoid replacing controls or replaying effects when a poll has no visual changes.
+    if (main.dataset.renderedMarkup !== markup) {
+      main.innerHTML = markup;
+      main.dataset.renderedMarkup = markup;
+    }
     document.title = (route.view === "book" ? route.book.name : route.view === "calendar" ? "Ημερολόγιο" : route.view === "food" ? "Τι τρώω" : "Σημειώσεις") + " · Planner";
     const viewKey = route.view === "book" ? "book:"+route.book.id : route.view;
     animateNavigation(viewKey, route.view === "calendar" ? 1 : route.view === "food" ? 2 : 0);
@@ -569,7 +594,7 @@ async function startPlanner() {
     if (!n || !n.items[index]) return;
     const items = n.items.map((item, i) => i === index ? { ...item, done: box.checked } : item);
     try { await write("note", n.id, { ...n, items, updated: Date.now() }, versions.get("note:" + n.id)); }
-    catch (error) { say(error.message); await loadData(); }
+    catch (error) { say(error.message); await loadData(); delete main.dataset.renderedMarkup; }
     render();
     if (!reducedMotion()) {
       const card = main.querySelector(`[data-note-card="${n.id}"]`);
